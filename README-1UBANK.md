@@ -164,7 +164,7 @@ git remote set-url --push upstream DISABLED
 
 ## 4. Deployment
 
-### Environments
+### What gets deployed
 
 | Environment | Purpose | Data |
 |---|---|---|
@@ -172,113 +172,195 @@ git remote set-url --push upstream DISABLED
 | `uat` | Testers and client teams test before release | Test data only |
 | `prod` | Live customers | Real data |
 
-Every environment runs **the same container image**. Only the configuration changes.
+Each environment has its own copy of everything below. Every environment runs **the same container image**; only the configuration changes.
 
-### Build the image
+```
+                         ┌──────────────── one domain, e.g. cba-uat.<domain> ────────────────┐
+ Staff browser ──HTTPS──►│ Load balancer (TLS)                                                │
+                         │   /fineract-provider/*  ──HTTP 8080──►  CBA-CORE container         │
+                         │   everything else       ──HTTP 80────►  cba-web-app container      │
+                         └────────────────────────────────────────────────────────────────────┘
+                              CBA-CORE ──► PostgreSQL (fineract_tenants, fineract_default)
+                              CBA-CORE ──► S3 bucket (client photos and documents)
+```
+
+Set up a new environment in the order below. Steps 1 to 3 are done once per environment; steps 4 to 7 are repeated for every release (see "Releasing a new version").
+
+### Step 1: Create the database
+
+CBA-CORE needs its own **PostgreSQL 18** instance (the version we develop and test against), with:
+
+- Private subnets only; the security group accepts port 5432 **from CBA-CORE only**.
+- Encryption at rest and automated backups. In `prod`: Multi-AZ and point-in-time recovery.
+
+Then, connected as the instance's master user, create the application user and the two databases:
+
+```sql
+CREATE USER cba_core WITH PASSWORD '<application database password>';
+CREATE DATABASE fineract_tenants OWNER cba_core;
+CREATE DATABASE fineract_default OWNER cba_core;
+```
+
+- `fineract_tenants` holds the list of tenants and their connection details.
+- `fineract_default` holds the bank's data (customers, accounts, transactions, GL).
+- Leave both databases **empty**. CBA-CORE creates every table itself on its first start.
+- CBA-CORE connects as `cba_core`, never as the master user.
+
+### Step 2: Create the secrets
+
+In the secrets manager, create for this environment:
+
+| Secret | Used by |
+|---|---|
+| Application database password (from step 1) | `FINERACT_HIKARI_PASSWORD` and `FINERACT_DEFAULT_TENANTDB_PWD` |
+| Master password: a long random value | `FINERACT_DEFAULT_TENANTDB_MASTER_PASSWORD` and `FINERACT_DEFAULT_MASTER_PASSWORD` (same value) |
+
+The master password encrypts the tenant database password that CBA-CORE stores in `fineract_tenants`. **It must never change after the first start**, or CBA-CORE can no longer decrypt it and won't start. Each environment has its own value.
+
+### Step 3: Create the S3 bucket and IAM role
+
+Uploaded files (client photos, KYC documents, signatures) are stored **outside the database**, and the container's own disk is wiped on every deployment, so every environment stores them in S3.
+
+- One bucket per environment, e.g. `<prefix>-cba-core-documents-uat`.
+- **Block all public access**; encryption at rest; **versioning on**, so an overwritten or deleted file can be recovered.
+- An **IAM role for the CBA-CORE container** (task role) with read, write and delete on that bucket only. CBA-CORE uses the role automatically; no access keys are created.
+
+### Step 4: Build and push the image
 
 ```bash
-# Build into the local Docker daemon (image: fineract:<version> and fineract:latest)
-./gradlew :fineract-provider:jibDockerBuild
-
-# Or build and push straight to the registry (no Docker needed), tagged with the git commit
 ./gradlew :fineract-provider:jib -Djib.to.image=<registry>/cba-core:<git-sha>
 ```
 
-- Base image: `azul/zulu-openjdk-alpine:21`; runs as user `nobody`.
-- The container listens on **8443** (HTTPS) or **8080** (HTTP), depending on the TLS settings below.
-- Tag images with the **git commit**, never only `latest`, so every deployment can be traced to its code.
-- **No start command to type:** Jib builds the start command into the image (it runs `org.apache.fineract.ServerApplication`). DevOps supplies only the image, the environment variables below and the port mapping.
+- Jib builds the image and pushes it straight to the registry. No Dockerfile and no Docker daemon are needed.
+- Tag with the **git commit**, never only `latest`, so every deployment can be traced to its code.
+- Base image `azul/zulu-openjdk-alpine:21`; the container runs as user `nobody`.
+- The start command is built into the image. Nothing is typed to start it.
 
-### Configuration
+To build into a local Docker daemon instead: `./gradlew :fineract-provider:jibDockerBuild` (image `fineract:latest`).
+
+### Step 5: Create the CBA-CORE service
+
+| Setting | Value |
+|---|---|
+| Image | `<registry>/cba-core:<git-sha>` from step 4 |
+| Container port | `8080` |
+| CPU / memory | 2 vCPU / 4 GB |
+| Number of containers | **1**. Running more than one needs the manager/worker split (`FINERACT_MODE_*` variables), which is not set up. |
+| Task role | The IAM role from step 3 |
+| Environment variables | Every variable in "Configuration reference" below, with the secrets from step 2 injected from the secrets manager |
+
+### Step 6: Set up the load balancer
+
+- HTTPS listener with the environment's certificate. TLS ends here; traffic to the container is plain HTTP inside the private network.
+- Target group for CBA-CORE: HTTP, port `8080`, health check path `/fineract-provider/actuator/health/readiness`.
+- Routing rule: path `/fineract-provider/*` goes to the CBA-CORE target group. Everything else goes to the web-app (see the `cba-web-app` README).
+- Health check grace period: **at least 10 minutes**, so the first start (step 7) isn't killed for being slow.
+
+### Step 7: First start and checks
+
+On the first start against an empty database, CBA-CORE creates and migrates all its tables. This takes several minutes, and it reports ready only when it's finished. Follow the container logs; the start is complete when the log shows `Started ServerApplication`.
+
+Then check:
+
+```bash
+# 1. Ready
+curl https://<environment-domain>/fineract-provider/actuator/health/readiness
+# -> {"status":"UP"}
+
+# 2. Can sign in (dev / uat only)
+curl -X POST https://<environment-domain>/fineract-provider/api/v1/authentication \
+  -H 'Fineract-Platform-TenantId: default' -H 'Content-Type: application/json' \
+  -d '{"username":"mifos","password":"password"}'
+# -> JSON containing "authenticated": true
+```
+
+### Step 8 (`prod` only): Lock down the default login
+
+Fineract creates an administrator `mifos` with password `password` on a new database. In `dev` and `uat` it stays, so engineers and testers can sign in. In `prod`, **before the environment is opened to anyone**:
+
+1. Sign in once as `mifos` and immediately change its password to a long random value. Store it in the secrets manager as a break-glass credential.
+2. Create named administrator accounts for the people who need them (no shared accounts).
+3. Sign in as one of the named administrators and **disable or delete** the `mifos` user (Admin → Users).
+4. Confirm that signing in with `mifos` / `password` fails, and record the check in the go-live checklist.
+
+When staff sign in through an identity provider, basic-auth sign-in can be switched off entirely with `FINERACT_SECURITY_BASICAUTH_ENABLED=false`.
+
+### Releasing a new version
+
+1. Build and push the new image (step 4).
+2. **`prod` only:** take a database snapshot.
+3. Update the service to the new image tag.
+4. On start, CBA-CORE applies any new database migrations automatically, then reports ready.
+5. Repeat the checks in step 7.
+
+**Rolling back:** redeploy the previous image tag. If the release included database migrations, the previous image may not run against the migrated database; restore the snapshot taken before the release first.
+
+### Configuration reference
 
 Set these as **environment variables** on the container. Values marked **Secret** come from the secrets manager and must never be written in code, images, task definitions or tickets.
 
-**Database (CBA-CORE has its own PostgreSQL cluster)**
+**Database**
 
-| Variable | Example / rule | Secret |
+| Variable | Value | Secret |
 |---|---|---|
-| `FINERACT_HIKARI_JDBC_URL` | `jdbc:postgresql://<host>:5432/fineract_tenants` | |
-| `FINERACT_HIKARI_USERNAME` | Application database user (not the superuser) | |
-| `FINERACT_HIKARI_PASSWORD` | | **Secret** |
-| `FINERACT_DEFAULT_TENANTDB_HOSTNAME` | Same host as above | |
+| `FINERACT_HIKARI_JDBC_URL` | `jdbc:postgresql://<database-host>:5432/fineract_tenants` | |
+| `FINERACT_HIKARI_USERNAME` | `cba_core` | |
+| `FINERACT_HIKARI_PASSWORD` | Application database password | **Secret** |
+| `FINERACT_DEFAULT_TENANTDB_HOSTNAME` | `<database-host>` | |
 | `FINERACT_DEFAULT_TENANTDB_PORT` | `5432` | |
-| `FINERACT_DEFAULT_TENANTDB_UID` | Application database user | |
-| `FINERACT_DEFAULT_TENANTDB_PWD` | | **Secret** |
+| `FINERACT_DEFAULT_TENANTDB_UID` | `cba_core` | |
+| `FINERACT_DEFAULT_TENANTDB_PWD` | Application database password | **Secret** |
 | `FINERACT_DEFAULT_TENANTDB_NAME` | `fineract_default` | |
 | `FINERACT_DEFAULT_TENANTDB_IDENTIFIER` | `default` | |
 | `FINERACT_DEFAULT_TENANTDB_TIMEZONE` | `Africa/Lagos` (applied only when the tenant is first created) | |
 | `FINERACT_DEFAULT_TENANTDB_DESCRIPTION` | `1UBank` | |
-| `FINERACT_DEFAULT_TENANTDB_MASTER_PASSWORD` | Encrypts the tenant DB password stored in the database. **Never the default `fineract`** in `uat`/`prod`. Must not change once set (or the stored password can't be decrypted). | **Secret** |
-| `FINERACT_DEFAULT_MASTER_PASSWORD` | Same rule as above | **Secret** |
+| `FINERACT_DEFAULT_TENANTDB_MASTER_PASSWORD` | Master password (step 2) | **Secret** |
+| `FINERACT_DEFAULT_MASTER_PASSWORD` | Master password (step 2) | **Secret** |
+
+**Server**
+
+| Variable | Value |
+|---|---|
+| `FINERACT_SERVER_SSL_ENABLED` | `false` (TLS ends at the load balancer) |
+| `FINERACT_SERVER_PORT` | `8080` |
+| `JAVA_TOOL_OPTIONS` | `-XX:MaxRAMPercentage=75` (lets Java use 3 GB of the 4 GB; the default is only a quarter) |
 
 **Security**
 
 | Variable | `dev` / `uat` | `prod` |
 |---|---|---|
-| `FINERACT_SECURITY_CORS_ALLOWED_ORIGIN_PATTERNS` | The portal's URL for that environment | The production portal URL only (default `*` allows any site) |
-| `FINERACT_INSECURE_HTTP_CLIENT` | `false` | `false` (default `true` skips certificate checks on outgoing calls) |
+| `FINERACT_SECURITY_CORS_ALLOWED_ORIGIN_PATTERNS` | `https://<environment-domain>` | `https://<prod-domain>` (the default `*` allows any site) |
+| `FINERACT_INSECURE_HTTP_CLIENT` | `false` | `false` (the default `true` skips certificate checks on outgoing calls) |
 | `SPRINGDOC_API_DOCS_ENABLED`, `SPRINGDOC_SWAGGER_UI_ENABLED` | `true` (handy for testing) | `false` |
 | `FINERACT_MANAGEMENT_ENDPOINT_WEB_EXPOSURE_INCLUDE` | `health,info,prometheus` | `health` (plus `prometheus` only if monitoring scrapes it on a private network) |
 
-**TLS**
+**File storage**
 
-One of:
-
-- **TLS ends at the load balancer** (usual on AWS): `FINERACT_SERVER_SSL_ENABLED=false`, `FINERACT_SERVER_PORT=8080`. The load balancer holds the certificate; traffic from it to Fineract stays inside the private network.
-- **TLS in the container:** `FINERACT_SERVER_SSL_ENABLED=true` with our own keystore via `FINERACT_SERVER_SSL_KEY_STORE` and `FINERACT_SERVER_SSL_KEY_STORE_PASSWORD` (**Secret**). Never use the built-in self-signed keystore (password `openmf`) outside a laptop.
-
-### File storage (client photos and documents)
-
-Fineract stores uploaded files (client photos, KYC documents, signatures, attachments) **outside the database**. The database only keeps a pointer to each file.
-
-By default, files go to a folder **inside the container** (`/tmp/.fineract` in our image). Containers are replaced on every deployment and restart, so **those files would be lost**. Every deployed environment must therefore use S3:
-
-| Variable | `dev` / `uat` / `prod` |
+| Variable | Value |
 |---|---|
 | `FINERACT_CONTENT_FILESYSTEM_ENABLED` | `false` |
 | `FINERACT_CONTENT_S3_ENABLED` | `true` |
-| `FINERACT_CONTENT_S3_BUCKET_NAME` | One bucket per environment, e.g. `<prefix>-cba-core-documents-uat` |
+| `FINERACT_CONTENT_S3_BUCKET_NAME` | The bucket from step 3 |
 | `FINERACT_CONTENT_S3_REGION` | The bucket's AWS region |
-| `FINERACT_CONTENT_S3_ACCESS_KEY`, `FINERACT_CONTENT_S3_SECRET_KEY` | **Leave empty.** Fineract then uses the container's IAM role. Never store AWS keys. |
-| `FINERACT_CONTENT_S3_ENDPOINT` | Leave empty on AWS. Only for S3-compatible storage elsewhere (e.g. MinIO in a Nigerian data centre). |
+| `FINERACT_CONTENT_S3_ACCESS_KEY`, `FINERACT_CONTENT_S3_SECRET_KEY` | **Leave unset.** CBA-CORE then uses the task role. |
+| `FINERACT_CONTENT_S3_ENDPOINT` | Leave unset on AWS. Only for S3-compatible storage elsewhere (e.g. MinIO). |
 
-Bucket requirements:
+Accepted uploads are limited by `FINERACT_CONTENT_REGEX_WHITELIST` and `FINERACT_CONTENT_MIME_WHITELIST` (default: PDF, Word, Excel, JPEG, PNG).
 
-- **Private**: block all public access. Staff see files only through CBA-CORE.
-- **Encrypted at rest**, with **versioning** on, so an overwritten or deleted file can be recovered.
-- **Access only from CBA-CORE's IAM role** (read, write, delete on that bucket).
-- **Location**: KYC documents are customer data. The bucket's location is part of the CBN data-localisation decision, together with the database.
-
-Accepted uploads are limited by `FINERACT_CONTENT_REGEX_WHITELIST` and `FINERACT_CONTENT_MIME_WHITELIST` (default: PDF, Word, Excel, JPEG, PNG). Keep the defaults unless Operations needs another type.
-
-On a laptop the default folder (`~/.fineract`) is fine.
-
-### Health checks
+**Health checks**
 
 | Check | Path |
 |---|---|
 | Liveness | `/fineract-provider/actuator/health/liveness` |
 | Readiness | `/fineract-provider/actuator/health/readiness` |
 
-Allow several minutes on the **first** start of a new database: Fineract creates and migrates all tables before it reports ready.
-
-### Default `mifos` / `password` login
-
-Fineract creates an administrator `mifos` with password `password` on a new database.
-
-- **`dev` and `uat`:** keep it, so engineers and testers can sign in. These environments hold test data only.
-- **`prod`:** turn it off **before the environment is opened to anyone**:
-  1. Sign in once as `mifos` and immediately change its password to a long random value (store it in the secrets manager as a break-glass credential).
-  2. Create named administrator accounts for the people who need them (no shared accounts).
-  3. Sign in as one of the named administrators and **disable or delete** the `mifos` user (Admin → Users).
-  4. Confirm that signing in with `mifos` / `password` fails, and record the check in the go-live checklist.
-
-When staff sign in through an identity provider, basic-auth sign-in can be switched off entirely with `FINERACT_SECURITY_BASICAUTH_ENABLED=false`.
+**TLS inside the container** (only if the load balancer can't terminate TLS): `FINERACT_SERVER_SSL_ENABLED=true`, `FINERACT_SERVER_PORT=8443`, and our own keystore via `FINERACT_SERVER_SSL_KEY_STORE` and `FINERACT_SERVER_SSL_KEY_STORE_PASSWORD` (**Secret**). Never use the image's built-in self-signed keystore (password `openmf`).
 
 ### Never in production
 
 - `./gradlew devRun` (skips quality checks; for laptops only)
 - Default passwords: `mifos`/`password`, the `root`/`postgres` database login, master password `fineract`, keystore password `openmf`
+- Connecting as the database master user
 - Swagger UI open to the internet
 - `FINERACT_INSECURE_HTTP_CLIENT=true`
 - Any real customer data in `dev` or `uat`
