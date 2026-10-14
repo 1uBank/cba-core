@@ -164,8 +164,6 @@ git remote set-url --push upstream DISABLED
 
 ## 4. Deployment
 
-> **Status:** draft for review with DevOps. Hosting (AWS for now; CBN data-localisation decision due January 2027), the container platform and TLS setup are still to be confirmed. Update this section when they are.
-
 ### Environments
 
 | Environment | Purpose | Data |
@@ -222,9 +220,9 @@ Set these as **environment variables** on the container. Values marked **Secret*
 | `SPRINGDOC_API_DOCS_ENABLED`, `SPRINGDOC_SWAGGER_UI_ENABLED` | `true` (handy for testing) | `false` |
 | `FINERACT_MANAGEMENT_ENDPOINT_WEB_EXPOSURE_INCLUDE` | `health,info,prometheus` | `health` (plus `prometheus` only if monitoring scrapes it on a private network) |
 
-**TLS (to be confirmed with DevOps)**
+**TLS**
 
-Pick one:
+One of:
 
 - **TLS ends at the load balancer** (usual on AWS): `FINERACT_SERVER_SSL_ENABLED=false`, `FINERACT_SERVER_PORT=8080`. The load balancer holds the certificate; traffic from it to Fineract stays inside the private network.
 - **TLS in the container:** `FINERACT_SERVER_SSL_ENABLED=true` with our own keystore via `FINERACT_SERVER_SSL_KEY_STORE` and `FINERACT_SERVER_SSL_KEY_STORE_PASSWORD` (**Secret**). Never use the built-in self-signed keystore (password `openmf`) outside a laptop.
@@ -275,7 +273,7 @@ Fineract creates an administrator `mifos` with password `password` on a new data
   3. Sign in as one of the named administrators and **disable or delete** the `mifos` user (Admin → Users).
   4. Confirm that signing in with `mifos` / `password` fails, and record the check in the go-live checklist.
 
-Once staff sign in through the identity provider (decision pending), basic-auth sign-in can be switched off entirely with `FINERACT_SECURITY_BASICAUTH_ENABLED=false`.
+When staff sign in through an identity provider, basic-auth sign-in can be switched off entirely with `FINERACT_SECURITY_BASICAUTH_ENABLED=false`.
 
 ### Never in production
 
