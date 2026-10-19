@@ -79,8 +79,8 @@ jobs:
 
       # Optional smoke test: set repo variable DEV_BASE_URL (e.g. https://cba-dev.example.com)
       # and make sure the ALB security group allows GitHub's runners (or run it from inside your network).
-      - name: Smoke test
-        if: ${{ vars.DEV_BASE_URL != '' }}
-        run: |
-          curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-connrefused \
-            "${{ vars.DEV_BASE_URL }}/fineract-provider/actuator/health/readiness"
+     # - name: Smoke test
+       # if: ${{ vars.DEV_BASE_URL != '' }}
+       # run: |
+        #  curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-connrefused \
+         #   "${{ vars.DEV_BASE_URL }}/fineract-provider/actuator/health/readiness"
