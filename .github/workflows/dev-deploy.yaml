@@ -31,6 +31,12 @@ jobs:
           java-version: "21"
 
       - uses: gradle/actions/setup-gradle@v4
+      - name: Show GitHub OIDC context
+        run: |
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Ref: $GITHUB_REF"
+          echo "Branch: $GITHUB_REF_NAME"
+          echo "Event: $GITHUB_EVENT_NAME"
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
