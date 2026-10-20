@@ -1,101 +1,3 @@
-# name: deploy-dev
-
-# on:
-#   push:
-#     branches: [dev]
-#   workflow_dispatch: {}   # lets you re-run manually from the Actions tab
-
-# # Never run two deploys against the same service at once.
-# concurrency:
-#   group: deploy-dev
-#   cancel-in-progress: false
-
-# permissions:
-#   contents: read
-
-# env:
-#   AWS_REGION: us-east-1
-#   ECR_REPOSITORY: cba-core-dev
-#   ECS_CLUSTER: cba-core-dev
-#   ECS_SERVICE: cba-core-dev
-#   TASK_FAMILY: cba-core-dev
-#   CONTAINER_NAME: cba-core
-
-# jobs:
-#   build-and-push:
-#     runs-on: ubuntu-latest
-#     timeout-minutes: 45
-#     outputs:
-#       image: ${{ steps.image.outputs.image }}
-#     steps:
-#       - uses: actions/checkout@v4
-#         with:
-#           fetch-depth: 0   # full history + tags: the build derives its version from git tags
-
-#       - uses: actions/setup-java@v4
-#         with:
-#           distribution: zulu
-#           java-version: "21"
-
-#       - uses: gradle/actions/setup-gradle@v4
-
-#       - uses: aws-actions/configure-aws-credentials@v4
-#         with:
-#           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-#           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-#           aws-region: ${{ env.AWS_REGION }}
-
-#       - id: ecr
-#         uses: aws-actions/amazon-ecr-login@v2
-
-#       - id: image
-#         run: echo "image=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
-
-#       # Jib builds the image without a Docker daemon and pushes it straight to ECR.
-#       - name: Build and push with Jib
-#         run: ./gradlew :fineract-provider:jib -Djib.to.image=${{ steps.image.outputs.image }}
-
-#   deploy:
-#     needs: build-and-push
-#     runs-on: ubuntu-latest
-#     timeout-minutes: 45
-#     steps:
-#       - uses: aws-actions/configure-aws-credentials@v4
-#         with:
-#           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-#           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-#           aws-region: ${{ env.AWS_REGION }}
-
-#       # Start from the latest revision in AWS (Terraform owns everything except the image).
-#       - name: Fetch current task definition
-#         run: |
-#           aws ecs describe-task-definition \
-#             --task-definition "$TASK_FAMILY" \
-#             --query taskDefinition > task-definition.json
-
-#       - id: render
-#         uses: aws-actions/amazon-ecs-render-task-definition@v1
-#         with:
-#           task-definition: task-definition.json
-#           container-name: ${{ env.CONTAINER_NAME }}
-#           image: ${{ needs.build-and-push.outputs.image }}
-
-#       - uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-#         with:
-#           task-definition: ${{ steps.render.outputs.task-definition }}
-#           cluster: ${{ env.ECS_CLUSTER }}
-#           service: ${{ env.ECS_SERVICE }}
-#           wait-for-service-stability: true
-#           wait-for-minutes: 30
-
-#       # Optional smoke test: runs only if the repo variable DEV_BASE_URL is set
-#       # (e.g. https://cba-dev.example.com). The ALB must be reachable from GitHub's runners.
-#       - name: Smoke test
-#         if: ${{ vars.DEV_BASE_URL != '' }}
-#         run: |
-#           curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-connrefused \
-#             "${{ vars.DEV_BASE_URL }}/fineract-provider/actuator/health/readiness"
-
 name: deploy-dev
 
 on:
@@ -109,7 +11,6 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  id-token: write   # needed for OIDC
   contents: read
 
 env:
@@ -140,7 +41,8 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - id: ecr
@@ -160,7 +62,8 @@ jobs:
     steps:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       # Start from the latest revision in AWS (Terraform owns everything except the image).
