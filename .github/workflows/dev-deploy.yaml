@@ -38,11 +38,15 @@ jobs:
           echo "Branch: $GITHUB_REF_NAME"
           echo "Event: $GITHUB_EVENT_NAME"
 
+      # - uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: arn:aws:iam::612457065814:role/cba-core-dev-gha-deploy
+      #     aws-region: ${{ env.AWS_REGION }}
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::612457065814:role/cba-core-dev-gha-deploy
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
-
       - id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
