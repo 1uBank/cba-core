@@ -101,7 +101,7 @@ name: deploy-dev
 on:
   push:
     branches: [dev]
-  workflow_dispatch: {}   # re-run to pick up Terraform-side task definition changes
+  workflow_dispatch: {}   # lets you re-run manually from the Actions tab
 
 # Never run two deploys against the same service at once.
 concurrency:
@@ -109,13 +109,12 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  id-token: write   # OIDC
+  id-token: write   # needed for OIDC
   contents: read
 
 env:
-  # Repo variables: Settings > Secrets and variables > Actions > Variables
-  AWS_REGION: ${{ vars.AWS_REGION }}
-  ECR_REPOSITORY: cba-core-dev        # <name>-<environment> from the Terraform module
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: cba-core-dev
   ECS_CLUSTER: cba-core-dev
   ECS_SERVICE: cba-core-dev
   TASK_FAMILY: cba-core-dev
@@ -123,12 +122,14 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest        # x86_64 -> matches cpu_architecture = "X86_64" in the module
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     outputs:
       image: ${{ steps.image.outputs.image }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history + tags: the build derives its version from git tags
 
       - uses: actions/setup-java@v4
         with:
@@ -148,7 +149,7 @@ jobs:
       - id: image
         run: echo "image=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
-      # Jib builds the image without a Docker daemon and pushes straight to ECR.
+      # Jib builds the image without a Docker daemon and pushes it straight to ECR.
       - name: Build and push with Jib
         run: ./gradlew :fineract-provider:jib -Djib.to.image=${{ steps.image.outputs.image }}
 
@@ -184,8 +185,8 @@ jobs:
           wait-for-service-stability: true
           wait-for-minutes: 30
 
-      # Optional smoke test: set repo variable DEV_BASE_URL (e.g. https://cba-dev.example.com)
-      # and make sure the ALB security group allows GitHub's runners (or run it from inside your network).
+      # Optional smoke test: runs only if the repo variable DEV_BASE_URL is set
+      # (e.g. https://cba-dev.example.com). The ALB must be reachable from GitHub's runners.
       - name: Smoke test
         if: ${{ vars.DEV_BASE_URL != '' }}
         run: |
