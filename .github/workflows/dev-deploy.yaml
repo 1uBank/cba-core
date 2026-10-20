@@ -3,14 +3,20 @@ name: deploy-dev
 on:
   push:
     branches: [dev]
+  workflow_dispatch: {}   # lets you re-run manually from the Actions tab
+
+# Never run two deploys against the same service at once.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
 
 permissions:
-  id-token: write  
+  id-token: write   # needed for OIDC
   contents: read
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: cba-core-dev        
+  ECR_REPOSITORY: cba-core-dev
   ECS_CLUSTER: cba-core-dev
   ECS_SERVICE: cba-core-dev
   TASK_FAMILY: cba-core-dev
@@ -18,12 +24,14 @@ env:
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest       
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     outputs:
       image: ${{ steps.image.outputs.image }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history + tags: the build derives its version from git tags
 
       - uses: actions/setup-java@v4
         with:
@@ -31,28 +39,32 @@ jobs:
           java-version: "21"
 
       - uses: gradle/actions/setup-gradle@v4
-      - name: Show GitHub OIDC context
-        run: |
-          echo "Repository: $GITHUB_REPOSITORY"
-          echo "Ref: $GITHUB_REF"
-          echo "Branch: $GITHUB_REF_NAME"
-          echo "Event: $GITHUB_EVENT_NAME"
 
-      # - uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: arn:aws:iam::612457065814:role/cba-core-dev-gha-deploy
-      #     aws-region: ${{ env.AWS_REGION }}
+      # TEMPORARY: prints the OIDC claims AWS will evaluate. Remove once OIDC works.
+      - name: Debug OIDC claims
+        run: |
+          python3 - <<'PY'
+          import os, json, base64, urllib.request
+          url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"] + "&audience=sts.amazonaws.com"
+          req = urllib.request.Request(url, headers={"Authorization": "bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
+          tok = json.load(urllib.request.urlopen(req))["value"]
+          p = tok.split(".")[1]; p += "=" * (-len(p) % 4)
+          c = json.loads(base64.urlsafe_b64decode(p))
+          print({k: c.get(k) for k in ("sub", "repository", "ref", "event_name")})
+          PY
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
       - id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - id: image
         run: echo "image=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
+      # Jib builds the image without a Docker daemon and pushes it straight to ECR.
       - name: Build and push with Jib
         run: ./gradlew :fineract-provider:jib -Djib.to.image=${{ steps.image.outputs.image }}
 
@@ -66,6 +78,7 @@ jobs:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # Start from the latest revision in AWS (Terraform owns everything except the image).
       - name: Fetch current task definition
         run: |
           aws ecs describe-task-definition \
@@ -87,10 +100,10 @@ jobs:
           wait-for-service-stability: true
           wait-for-minutes: 30
 
-      # Optional smoke test: set repo variable DEV_BASE_URL (e.g. https://cba-dev.example.com)
-      # and make sure the ALB security group allows GitHub's runners (or run it from inside your network).
-     # - name: Smoke test
-       # if: ${{ vars.DEV_BASE_URL != '' }}
-       # run: |
-        #  curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-connrefused \
-         #   "${{ vars.DEV_BASE_URL }}/fineract-provider/actuator/health/readiness"
+      # Optional smoke test: runs only if the repo variable DEV_BASE_URL is set
+      # (e.g. https://cba-dev.example.com). The ALB must be reachable from GitHub's runners.
+      - name: Smoke test
+        if: ${{ vars.DEV_BASE_URL != '' }}
+        run: |
+          curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-connrefused \
+            "${{ vars.DEV_BASE_URL }}/fineract-provider/actuator/health/readiness"
