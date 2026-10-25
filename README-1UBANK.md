@@ -2,6 +2,7 @@
 
 This repository is 1UBank's copy of [Apache Fineract](https://github.com/apache/fineract). It is **CBA-CORE**, the core of the 1UBank core banking application.
 
+
 - **Base version:** Fineract `1.15.0` (upstream tag `1.15.0`)
 - **Branches:** `dev`, `uat`, `main` (see "Branches and remotes"). All start from the `1.15.0` tag + our patches
 - **Our changes:** listed in [PATCHES-1UBANK.md](PATCHES-1UBANK.md)
