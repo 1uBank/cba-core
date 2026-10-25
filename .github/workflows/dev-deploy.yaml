@@ -3,9 +3,8 @@ name: deploy-dev
 on:
   push:
     branches: [dev]
-  workflow_dispatch: {}   # lets you re-run manually from the Actions tab
+  workflow_dispatch: {}   
 
-# Never run two deploys against the same service at once.
 concurrency:
   group: deploy-dev
   cancel-in-progress: false
@@ -51,7 +50,6 @@ jobs:
       - id: image
         run: echo "image=${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
-      # Jib builds the image without a Docker daemon and pushes it straight to ECR.
       - name: Build and push with Jib
         run: ./gradlew :fineract-provider:jib -Djib.to.image=${{ steps.image.outputs.image }}
 
@@ -66,7 +64,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Start from the latest revision in AWS (Terraform owns everything except the image).
       - name: Fetch current task definition
         run: |
           aws ecs describe-task-definition \
@@ -88,8 +85,6 @@ jobs:
           wait-for-service-stability: true
           wait-for-minutes: 30
 
-      # Optional smoke test: runs only if the repo variable DEV_BASE_URL is set
-      # (e.g. https://cba-dev.example.com). The ALB must be reachable from GitHub's runners.
       - name: Smoke test
         if: ${{ vars.DEV_BASE_URL != '' }}
         run: |
