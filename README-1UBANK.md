@@ -215,8 +215,9 @@ In the secrets manager, create for this environment:
 |---|---|
 | Application database password (from step 1) | `FINERACT_HIKARI_PASSWORD` and `FINERACT_DEFAULT_TENANTDB_PWD` |
 | Master password: a long random value | `FINERACT_DEFAULT_TENANTDB_MASTER_PASSWORD` and `FINERACT_DEFAULT_MASTER_PASSWORD` (same value) |
+| Secret of the auth service's `user-provisioner` client (same value as `USER_PROVISIONER_SECRET` in `cba-auth`) | `ONEUBANK_AUTHSYNC_CLIENTSECRET` |
 
-The master password encrypts the tenant database password that CBA-CORE stores in `fineract_tenants`. **It must never change after the first start**, or CBA-CORE can no longer decrypt it and won't start. Each environment has its own value.
+The master password encrypts the tenant database password that CBA-CORE stores in `fineract_tenants`. **It must never change after the first start**, or CBA-CORE can no longer decrypt it and won't start. Each environment has its own value. To change the application database password later, follow "Rotating the database password" below; updating the secret alone breaks CBA-CORE.
 
 ### Step 3: Create the S3 bucket and IAM role
 
@@ -232,7 +233,7 @@ Uploaded files (client photos, KYC documents, signatures) are stored **outside t
 ./gradlew :fineract-provider:jib -Djib.to.image=<registry>/cba-core:<git-sha>
 ```
 
-- Jib builds the image and pushes it straight to the registry. No Dockerfile and no Docker daemon are needed.
+- cba-core has **no Dockerfile**. Jib, a Gradle plugin, builds the image from the Gradle build itself and pushes it straight to the registry, so the build machine doesn't need Docker installed. The result is an ordinary container image, deployed like any other.
 - Tag with the **git commit**, never only `latest`, so every deployment can be traced to its code.
 - Base image `azul/zulu-openjdk-alpine:21`; the container runs as user `nobody`.
 - The start command is built into the image. Nothing is typed to start it.
@@ -296,6 +297,46 @@ When staff sign in through an identity provider, basic-auth sign-in can be switc
 
 **Rolling back:** redeploy the previous image tag. If the release included database migrations, the previous image may not run against the migrated database; restore the snapshot taken before the release first.
 
+### Rotating the database password
+
+CBA-CORE uses the application database password in two places:
+
+1. To connect to `fineract_tenants`: read from `FINERACT_HIKARI_PASSWORD` on every start.
+2. To connect to `fineract_default`: read from the `default` tenant's row in `fineract_tenants.tenant_server_connections`, column `schema_password`, **encrypted with the master password**. This row is created from `FINERACT_DEFAULT_TENANTDB_PWD` on the **first start only**. After that, CBA-CORE never reads `FINERACT_DEFAULT_TENANTDB_PWD` again.
+
+So changing the password in the secrets manager alone breaks CBA-CORE: it starts, connects to `fineract_tenants` with the new password, then fails to connect to `fineract_default` with the old one stored in the row. Rotate it in this order, and do steps 3 to 5 back to back: from step 3, CBA-CORE can't open any new database connection until it restarts with the new value.
+
+1. **Encrypt the new password** with the environment's master password, using the image that is currently deployed. First load both values into the shell without typing them on the command line (each `read` waits for you to paste the value; nothing is shown or saved in the history):
+
+   ```bash
+   read -rs MASTER_PASSWORD && export MASTER_PASSWORD   # paste the master password, press Enter
+   read -rs NEW_PASSWORD && export NEW_PASSWORD         # paste the new database password, press Enter
+   ```
+
+   Then run:
+
+   ```bash
+   docker run --rm -e MASTER_PASSWORD -e NEW_PASSWORD --entrypoint sh <registry>/cba-core:<deployed-git-sha> -c \
+     'java -cp "/app/resources:/app/classes:/app/libs/*" \
+        org.apache.fineract.infrastructure.core.service.database.DatabasePasswordEncryptor "$MASTER_PASSWORD" "$NEW_PASSWORD"'
+   ```
+
+   Keep the line `The encrypted password: …`. Ignore the hash line; the stored hash stays as it is because the master password hasn't changed.
+
+2. **Update the secret** in the secrets manager to the new password.
+3. **Change the password in PostgreSQL** (as the master user): `ALTER USER cba_core WITH PASSWORD '<new password>';`
+4. **Update the tenant row** (connected to `fineract_tenants`):
+
+   ```sql
+   UPDATE tenant_server_connections SET schema_password = '<encrypted password from step 1>' WHERE id = 1;
+   ```
+
+5. **Restart CBA-CORE** and repeat the checks in step 7.
+
+The same applies to the other `FINERACT_DEFAULT_TENANTDB_*` values (host, port, username, database name): after the first start, change them in `tenant_server_connections` (`schema_server`, `schema_server_port`, `schema_username`, `schema_name`), not only in the environment variables.
+
+**The master password itself can't be rotated this way.** `master_password_hash` in the same row is a hash of the master password, and CBA-CORE refuses to start (`Invalid master password on tenant connection 1.`) if the configured master password doesn't match it. Keep the master password unchanged for the life of the environment.
+
 ### Configuration reference
 
 Set these as **environment variables** on the container. Values marked **Secret** come from the secrets manager and must never be written in code, images, task definitions or tickets.
@@ -354,6 +395,41 @@ Accepted uploads are limited by `FINERACT_CONTENT_REGEX_WHITELIST` and `FINERACT
 |---|---|
 | Liveness | `/fineract-provider/actuator/health/liveness` |
 | Readiness | `/fineract-provider/actuator/health/readiness` |
+
+**Auth service** (code in `fineract-provider`, package `org.apache.fineract.oneubank.authsync`)
+
+Admins keep creating, editing and deleting staff in Fineract's user screen. After each change is saved, this module creates, updates or disables the same staff user in the auth service (`cba-auth`, realm `cba`). It also provides the endpoints the auth service uses to move existing staff across at their first login, keeping their current password (`/v1/oneubank/staff-migration`, callable only by the Fineract user `service-account-user-migrator`).
+
+| Variable | Value | Secret |
+|---|---|---|
+| `ONEUBANK_AUTHSYNC_ENABLED` | `true` (off by default) | |
+| `ONEUBANK_AUTHSYNC_BASEURL` | Auth service URL, for example `https://auth.<environment-domain>` | |
+| `ONEUBANK_AUTHSYNC_REALM` | `cba` (default) | |
+| `ONEUBANK_AUTHSYNC_CLIENTID` | `user-provisioner` (default) | |
+| `ONEUBANK_AUTHSYNC_CLIENTSECRET` | Secret of `user-provisioner` | **Secret** |
+| `ONEUBANK_AUTHSYNC_SENDSETUPEMAIL` | `false` (default). `true` emails new staff a setup link; needs email (SMTP) set up in the auth service's `cba` realm | |
+| `ONEUBANK_AUTHSYNC_MIGRATORUSERNAME` | `service-account-user-migrator` (default) | |
+| `ONEUBANK_AUTHSYNC_TIMEOUTSECONDS` | `10` (default) | |
+| `ONEUBANK_AUTHSYNC_REQUIREDACTIONS` | `UPDATE_PASSWORD,CONFIGURE_TOTP` (default): what a new staff member must do at first sign-in | |
+| `ONEUBANK_AUTHSYNC_SERVICEACCOUNTPREFIX` | `service-account-` (default): usernames that are never synced | |
+
+These settings and their defaults are also listed in `fineract-provider/src/main/resources/application.properties`, under `oneubank.auth-sync.*`.
+
+Create these Fineract users on each environment. They are never synced to the auth service, because they are clients there, not staff:
+
+| Fineract user | Role |
+|---|---|
+| `service-account-banking-api` | The Banking API's role, with only the permissions its calls need, plus `CHECKER_SUPER_USER` so its postings skip maker-checker |
+| `service-account-user-migrator` | None |
+
+To run it locally, start the auth service from `cba-auth` (see its README), then start CBA-CORE with:
+
+```bash
+export ONEUBANK_AUTHSYNC_ENABLED=true
+export ONEUBANK_AUTHSYNC_BASEURL=http://localhost:8180
+export ONEUBANK_AUTHSYNC_CLIENTSECRET=<USER_PROVISIONER_SECRET from cba-auth/.env>
+./gradlew devRun
+```
 
 **TLS inside the container** (only if the load balancer can't terminate TLS): `FINERACT_SERVER_SSL_ENABLED=true`, `FINERACT_SERVER_PORT=8443`, and our own keystore via `FINERACT_SERVER_SSL_KEY_STORE` and `FINERACT_SERVER_SSL_KEY_STORE_PASSWORD` (**Secret**). Never use the image's built-in self-signed keystore (password `openmf`).
 
