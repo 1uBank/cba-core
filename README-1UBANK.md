@@ -403,7 +403,7 @@ Admins keep creating, editing and deleting staff in Fineract's user screen. Afte
 | Variable | Value | Secret |
 |---|---|---|
 | `ONEUBANK_AUTHSYNC_ENABLED` | `true` (off by default) | |
-| `ONEUBANK_AUTHSYNC_BASEURL` | Auth service URL, for example `https://auth.<environment-domain>` | |
+| `ONEUBANK_AUTHSYNC_BASEURL` | The auth service's **internal** URL, for example `http://cba-auth.internal:8080`. Not its public URL: the sync uses the auth service's admin API, which is reachable only on the private network | |
 | `ONEUBANK_AUTHSYNC_REALM` | `cba` (default) | |
 | `ONEUBANK_AUTHSYNC_CLIENTID` | `user-provisioner` (default) | |
 | `ONEUBANK_AUTHSYNC_CLIENTSECRET` | Secret of `user-provisioner` | **Secret** |
