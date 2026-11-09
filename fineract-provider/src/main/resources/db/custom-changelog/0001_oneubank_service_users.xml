@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    1UBank: the CBA-CORE users of the platform services that call CBA-CORE with auth service tokens.
+    CBA-CORE maps a service token to the user named in its preferred_username, service-account-<clientId>,
+    so these must exist in every environment.
+
+    Neither user has a usable password: each gets the hash of a random value generated once, here,
+    so neither can sign in with a password, even while basic authentication is on.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <!-- The Banking API's role. CHECKER_SUPER_USER lets its calls skip maker-checker; the permissions
+         its endpoints need are added in later changesets, one per endpoint as it is built. -->
+    <changeSet id="oneubank-0001-banking-api-role" author="oneubank" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_role WHERE name = 'Banking API'</sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO m_role (name, description, is_disabled)
+            VALUES ('Banking API', 'The Banking API service (service-account-banking-api)', false);
+
+            INSERT INTO m_role_permission (role_id, permission_id)
+            SELECT r.id, p.id FROM m_role r, m_permission p
+            WHERE r.name = 'Banking API' AND p.code = 'CHECKER_SUPER_USER';
+        </sql>
+    </changeSet>
+
+    <changeSet id="oneubank-0001-banking-api-user" author="oneubank" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_appuser WHERE username = 'service-account-banking-api'</sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO m_appuser (is_deleted, office_id, username, firstname, lastname, password, email,
+                firsttime_login_remaining, nonexpired, nonlocked, nonexpired_credentials, enabled,
+                last_time_password_updated, password_never_expires, cannot_change_password)
+            VALUES (false, 1, 'service-account-banking-api', 'Banking', 'API',
+                '{SHA-256}{1}' || encode(sha256(convert_to(gen_random_uuid()::text || gen_random_uuid()::text, 'UTF8')), 'hex'),
+                'service-accounts@cba.invalid', false, true, true, true, true, CURRENT_DATE, true, true);
+
+            INSERT INTO m_appuser_role (appuser_id, role_id)
+            SELECT u.id, r.id FROM m_appuser u, m_role r
+            WHERE u.username = 'service-account-banking-api' AND r.name = 'Banking API';
+        </sql>
+    </changeSet>
+
+    <!-- The auth service's first-login migration plugin. No roles: CBA-CORE's staff-migration
+         endpoints accept only this user, and it can do nothing else. -->
+    <changeSet id="oneubank-0001-user-migrator-user" author="oneubank" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_appuser WHERE username = 'service-account-user-migrator'</sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO m_appuser (is_deleted, office_id, username, firstname, lastname, password, email,
+                firsttime_login_remaining, nonexpired, nonlocked, nonexpired_credentials, enabled,
+                last_time_password_updated, password_never_expires, cannot_change_password)
+            VALUES (false, 1, 'service-account-user-migrator', 'User', 'Migrator',
+                '{SHA-256}{1}' || encode(sha256(convert_to(gen_random_uuid()::text || gen_random_uuid()::text, 'UTF8')), 'hex'),
+                'service-accounts@cba.invalid', false, true, true, true, true, CURRENT_DATE, true, true);
+        </sql>
+    </changeSet>
+</databaseChangeLog>
