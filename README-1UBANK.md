@@ -415,19 +415,21 @@ Admins keep creating, editing and deleting staff in Fineract's user screen. Afte
 
 These settings and their defaults are also listed in `fineract-provider/src/main/resources/application.properties`, under `oneubank.auth-sync.*`.
 
-Create these Fineract users on each environment. They are never synced to the auth service, because they are clients there, not staff:
+The platform services that call CBA-CORE with auth service tokens need a CBA-CORE user each, named as in their tokens (`service-account-<clientId>`). A migration creates them on every environment at the first start, in Head Office (`fineract-provider/src/main/resources/db/custom-changelog/0001_oneubank_service_users.xml`). They are never synced to the auth service, because they are clients there, not staff, and neither has a usable password, so neither can sign in with one:
 
-| Fineract user | Role |
+| User | Role |
 |---|---|
-| `service-account-banking-api` | The Banking API's role, with only the permissions its calls need, plus `CHECKER_SUPER_USER` so its postings skip maker-checker |
+| `service-account-banking-api` | `Banking API`: `CHECKER_SUPER_USER`, so its postings skip maker-checker, plus the permissions its calls need, each added by a new changeset when the endpoint that needs it is built |
 | `service-account-user-migrator` | None |
+
+A new service user or permission is a new changeset in a new file under `db/custom-changelog/`; never edit one that has run.
 
 To run it locally, start the auth service from `cba-auth` (see its README), then start CBA-CORE with:
 
 ```bash
 export ONEUBANK_AUTHSYNC_ENABLED=true
 export ONEUBANK_AUTHSYNC_BASEURL=http://localhost:8180
-export ONEUBANK_AUTHSYNC_CLIENTSECRET=<USER_PROVISIONER_SECRET from cba-auth/.env>
+export ONEUBANK_AUTHSYNC_CLIENTSECRET=<user-provisioner secret, from the auth service admin console>
 ./gradlew devRun
 ```
 
