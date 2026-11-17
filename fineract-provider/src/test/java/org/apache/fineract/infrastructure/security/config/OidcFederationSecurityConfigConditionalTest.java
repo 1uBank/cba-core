@@ -20,8 +20,10 @@ package org.apache.fineract.infrastructure.security.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.stream.Stream;
+import org.apache.fineract.infrastructure.security.service.FineractOidcUserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -44,6 +46,15 @@ class OidcFederationSecurityConfigConditionalTest {
 
         assertThat(annotation).isNotNull();
         assertThat(annotation.value()).isEqualTo(100);
+    }
+
+    @Test
+    void converterBeanDoesNotNeedTheConfigurationInstance() throws NoSuchMethodException {
+        // The configuration injects the issuer resolver, which needs the converter: an instance method closes a
+        // dependency cycle and the application fails to start with OIDC federation enabled.
+        var method = OidcFederationSecurityConfig.class.getMethod("oidcJwtConverter", FineractOidcUserService.class);
+
+        assertThat(Modifier.isStatic(method.getModifiers())).isTrue();
     }
 
     @Test

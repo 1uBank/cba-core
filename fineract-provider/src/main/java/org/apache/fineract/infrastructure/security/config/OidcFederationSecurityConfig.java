@@ -174,8 +174,11 @@ public class OidcFederationSecurityConfig {
     // Managed beans — kept as @Bean for testability
     // -------------------------------------------------------------------------
 
+    // Static, so creating the converter does not need this configuration instance: this configuration injects
+    // DynamicJwtIssuerAuthenticationManagerResolver, which needs the converter, and an instance method closed
+    // that loop and stopped the application starting.
     @Bean
-    public FineractOidcJwtAuthenticationConverter oidcJwtConverter() {
+    public static FineractOidcJwtAuthenticationConverter oidcJwtConverter(FineractOidcUserService oidcUserService) {
         return new FineractOidcJwtAuthenticationConverter(oidcUserService);
     }
 
