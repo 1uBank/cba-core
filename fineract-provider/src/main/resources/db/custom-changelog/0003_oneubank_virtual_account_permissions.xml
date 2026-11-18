@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    1UBank: permissions of the static virtual account module.
+
+    A static virtual account is a savings account on the virtual account product, so its balance, transactions,
+    holds, blocks and the sweep to its parent use the savings account and account transfer permissions. These
+    cover what the module adds on top: its details (type, label, parent) and its own lifecycle.
+
+    The Banking API may create virtual accounts, read them, change their label and close them. Changing a virtual
+    account's parent is for bank staff only, in the portal, so the Banking API does not get CHANGEPARENT.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+
+    <changeSet id="oneubank-0003-virtual-account-permissions" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_permission (grouping, code, entity_name, action_name, can_maker_checker)
+            SELECT v.grouping, v.code, 'VIRTUALACCOUNT', v.action_name, v.can_maker_checker
+            FROM (VALUES
+                ('portfolio', 'CREATE_VIRTUALACCOUNT', 'CREATE', false),
+                ('portfolio', 'READ_VIRTUALACCOUNT', 'READ', false),
+                ('portfolio', 'UPDATE_VIRTUALACCOUNT', 'UPDATE', false),
+                ('portfolio', 'CLOSE_VIRTUALACCOUNT', 'CLOSE', true),
+                ('portfolio', 'CHANGEPARENT_VIRTUALACCOUNT', 'CHANGEPARENT', true)
+            ) AS v (grouping, code, action_name, can_maker_checker)
+            WHERE NOT EXISTS (SELECT 1 FROM m_permission p WHERE p.code = v.code);
+        </sql>
+    </changeSet>
+
+    <changeSet id="oneubank-0003-banking-api-virtual-account-permissions" author="oneubank" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <sqlCheck expectedResult="1">SELECT COUNT(*) FROM m_role WHERE name = 'Banking API'</sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO m_role_permission (role_id, permission_id)
+            SELECT r.id, p.id FROM m_role r, m_permission p
+            WHERE r.name = 'Banking API'
+              AND p.code IN ('CREATE_VIRTUALACCOUNT', 'READ_VIRTUALACCOUNT', 'UPDATE_VIRTUALACCOUNT', 'CLOSE_VIRTUALACCOUNT')
+              AND NOT EXISTS (SELECT 1 FROM m_role_permission rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
+        </sql>
+    </changeSet>
+</databaseChangeLog>
