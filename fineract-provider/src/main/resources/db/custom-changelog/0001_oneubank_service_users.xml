@@ -32,7 +32,7 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
 
     <!-- The Banking API's role. CHECKER_SUPER_USER lets its calls skip maker-checker; the permissions
-         its endpoints need are added in later changesets, one per endpoint as it is built. -->
+         its endpoints need are in 0002_oneubank_banking_api_permissions.xml. -->
     <changeSet id="oneubank-0001-banking-api-role" author="oneubank" dbms="postgresql">
         <preConditions onFail="MARK_RAN">
             <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_role WHERE name = 'Banking API'</sqlCheck>
