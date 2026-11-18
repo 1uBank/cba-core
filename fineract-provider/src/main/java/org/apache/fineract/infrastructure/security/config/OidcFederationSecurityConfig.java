@@ -56,6 +56,9 @@ import org.springframework.security.oauth2.server.resource.web.DefaultBearerToke
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.ExceptionTranslationFilter;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.AndRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 
 /**
  * Spring Security filter chain for OIDC Federation authentication.
@@ -74,9 +77,11 @@ import org.springframework.security.web.context.SecurityContextHolderFilter;
  * </ul>
  *
  * <p>
- * {@code @EnableMethodSecurity} is intentionally omitted. When Basic Auth is also enabled ({@code SecurityConfig} is
- * loaded), it already registers method security. When only OIDC is enabled, add {@code @EnableMethodSecurity} to a
- * separate configuration class.
+ * Runs alongside the Basic Auth chain ({@code SecurityConfig}), which Fineract requires and which registers method
+ * security. This chain takes the API calls that carry a Bearer token; the Basic chain takes the rest.
+ *
+ * <p>
+ * {@code @EnableMethodSecurity} is intentionally omitted: {@code SecurityConfig} already registers it.
  */
 @Configuration
 @EnableWebSecurity
@@ -123,12 +128,24 @@ public class OidcFederationSecurityConfig {
     @Autowired(required = false)
     private ClientRegistrationRepository clientRegistrationRepository;
 
+    // Matches on the path after the context path, as SecurityConfig does. Plain string patterns become Spring MVC
+    // matchers, which drop the Jersey servlet's /api prefix, so "/api/**" never matched an API call and every
+    // request fell through to the Basic chain.
+    static final PathPatternRequestMatcher.Builder API_MATCHER = PathPatternRequestMatcher.withDefaults();
+
+    // The API calls this chain takes: those with a Bearer token. The Basic chain matches every /api/** call, and
+    // Spring Security refuses two chains with the same matcher, so this one must be narrower.
+    static final RequestMatcher BEARER_API_CALLS = new AndRequestMatcher(API_MATCHER.matcher("/api/**"), request -> {
+        String authorization = request.getHeader("Authorization");
+        return authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7);
+    });
+
     @Bean
     @Order(100)
     public SecurityFilterChain oidcFederationFilterChain(HttpSecurity http) throws Exception {
-        http.securityMatcher("/api/**")
-                .authorizeHttpRequests(auth -> auth.requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/*/echo").permitAll().anyRequest().authenticated())
+        http.securityMatcher(BEARER_API_CALLS)
+                .authorizeHttpRequests(auth -> auth.requestMatchers(API_MATCHER.matcher(HttpMethod.OPTIONS, "/api/**")).permitAll()
+                        .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/echo")).permitAll().anyRequest().authenticated())
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // Bearer JWT validation — multi-issuer dynamic resolver (DB + YAML fallback)

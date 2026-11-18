@@ -20,6 +20,7 @@ package org.apache.fineract.infrastructure.security.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import jakarta.servlet.http.MappingMatch;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.stream.Stream;
@@ -28,6 +29,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.annotation.Order;
+import org.springframework.mock.web.MockHttpServletMapping;
+import org.springframework.mock.web.MockHttpServletRequest;
 
 class OidcFederationSecurityConfigConditionalTest {
 
@@ -55,6 +58,33 @@ class OidcFederationSecurityConfigConditionalTest {
         var method = OidcFederationSecurityConfig.class.getMethod("oidcJwtConverter", FineractOidcUserService.class);
 
         assertThat(Modifier.isStatic(method.getModifiers())).isTrue();
+    }
+
+    @Test
+    void takesApiCallsWithABearerToken() {
+        MockHttpServletRequest request = apiCall();
+        request.addHeader("Authorization", "Bearer x.y.z");
+
+        assertThat(OidcFederationSecurityConfig.BEARER_API_CALLS.matches(request)).isTrue();
+    }
+
+    @Test
+    void leavesOtherApiCallsToTheBasicChain() {
+        MockHttpServletRequest basic = apiCall();
+        basic.addHeader("Authorization", "Basic bWlmb3M6cGFzc3dvcmQ=");
+
+        assertThat(OidcFederationSecurityConfig.BEARER_API_CALLS.matches(basic)).isFalse();
+        assertThat(OidcFederationSecurityConfig.BEARER_API_CALLS.matches(apiCall())).isFalse();
+    }
+
+    // As CBA-CORE receives an API call: context path /fineract-provider, Jersey servlet mapped to /api/*
+    private static MockHttpServletRequest apiCall() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/fineract-provider/api/v1/offices");
+        request.setContextPath("/fineract-provider");
+        request.setServletPath("/api");
+        request.setPathInfo("/v1/offices");
+        request.setHttpServletMapping(new MockHttpServletMapping("v1/offices", "/api/*", "jerseyServlet", MappingMatch.PATH));
+        return request;
     }
 
     @Test
