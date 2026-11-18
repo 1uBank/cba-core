@@ -40,6 +40,8 @@ import org.apache.fineract.infrastructure.security.service.AuthTenantDetailsServ
 import org.apache.fineract.infrastructure.security.service.FineractOidcUserService;
 import org.apache.fineract.infrastructure.security.service.TenantOidcConfigService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -47,10 +49,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
@@ -77,11 +82,13 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
  * </ul>
  *
  * <p>
- * Runs alongside the Basic Auth chain ({@code SecurityConfig}), which Fineract requires and which registers method
- * security. This chain takes the API calls that carry a Bearer token; the Basic chain takes the rest.
- *
- * <p>
- * {@code @EnableMethodSecurity} is intentionally omitted: {@code SecurityConfig} already registers it.
+ * Runs alone or alongside Basic Auth ({@code fineract.security.basicauth.enabled}):
+ * <ul>
+ * <li><b>With Basic Auth</b> — this chain takes the API calls that carry a Bearer token; the Basic chain
+ * ({@code SecurityConfig}) takes the rest and registers method security and the password encoder.</li>
+ * <li><b>Alone</b> — this chain takes every API call, and {@link WithoutBasicAuth} registers what
+ * {@code SecurityConfig} would have.</li>
+ * </ul>
  */
 @Configuration
 @EnableWebSecurity
@@ -133,17 +140,26 @@ public class OidcFederationSecurityConfig {
     // request fell through to the Basic chain.
     static final PathPatternRequestMatcher.Builder API_MATCHER = PathPatternRequestMatcher.withDefaults();
 
-    // The API calls this chain takes: those with a Bearer token. The Basic chain matches every /api/** call, and
-    // Spring Security refuses two chains with the same matcher, so this one must be narrower.
+    // The API calls this chain takes alongside Basic Auth: those with a Bearer token. The Basic chain matches every
+    // /api/** call, and Spring Security refuses two chains with the same matcher, so this one must be narrower.
+    static final RequestMatcher ALL_API_CALLS = API_MATCHER.matcher("/api/**");
+
     static final RequestMatcher BEARER_API_CALLS = new AndRequestMatcher(API_MATCHER.matcher("/api/**"), request -> {
         String authorization = request.getHeader("Authorization");
         return authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7);
     });
 
+    @Value("${fineract.security.basicauth.enabled:true}")
+    private boolean basicAuthEnabled;
+
+    static RequestMatcher apiCalls(boolean basicAuthEnabled) {
+        return basicAuthEnabled ? BEARER_API_CALLS : ALL_API_CALLS;
+    }
+
     @Bean
     @Order(100)
     public SecurityFilterChain oidcFederationFilterChain(HttpSecurity http) throws Exception {
-        http.securityMatcher(BEARER_API_CALLS)
+        http.securityMatcher(apiCalls(basicAuthEnabled))
                 .authorizeHttpRequests(auth -> auth.requestMatchers(API_MATCHER.matcher(HttpMethod.OPTIONS, "/api/**")).permitAll()
                         .requestMatchers(API_MATCHER.matcher(HttpMethod.POST, "/api/*/echo")).permitAll().anyRequest().authenticated())
                 .csrf(AbstractHttpConfigurer::disable)
@@ -256,5 +272,21 @@ public class OidcFederationSecurityConfig {
             String resolvedTenant = oidcUser.getClaimAsString(tenantId) != null ? oidcUser.getClaimAsString(tenantId) : "default";
             return oidcUserService.processOidcUser(oidcUser, resolvedTenant);
         };
+    }
+
+    /**
+     * What {@code SecurityConfig} registers, for when OIDC federation runs without Basic Auth (and without Fineract's
+     * own OAuth2 server, which defines its own password encoder).
+     */
+    @Configuration
+    @EnableMethodSecurity
+    @ConditionalOnExpression("!${fineract.security.basicauth.enabled:true} and !${fineract.security.oauth2.enabled:false}")
+    static class WithoutBasicAuth {
+
+        // Fineract still stores and checks staff passwords, for example in the first-login migration.
+        @Bean
+        PasswordEncoder passwordEncoder() {
+            return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+        }
     }
 }

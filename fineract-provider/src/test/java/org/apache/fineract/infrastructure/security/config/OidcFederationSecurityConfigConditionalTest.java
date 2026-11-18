@@ -61,20 +61,29 @@ class OidcFederationSecurityConfigConditionalTest {
     }
 
     @Test
-    void takesApiCallsWithABearerToken() {
+    void withBasicAuthTakesApiCallsWithABearerToken() {
         MockHttpServletRequest request = apiCall();
         request.addHeader("Authorization", "Bearer x.y.z");
 
-        assertThat(OidcFederationSecurityConfig.BEARER_API_CALLS.matches(request)).isTrue();
+        assertThat(OidcFederationSecurityConfig.apiCalls(true).matches(request)).isTrue();
     }
 
     @Test
-    void leavesOtherApiCallsToTheBasicChain() {
+    void withBasicAuthLeavesOtherApiCallsToTheBasicChain() {
         MockHttpServletRequest basic = apiCall();
         basic.addHeader("Authorization", "Basic bWlmb3M6cGFzc3dvcmQ=");
 
-        assertThat(OidcFederationSecurityConfig.BEARER_API_CALLS.matches(basic)).isFalse();
-        assertThat(OidcFederationSecurityConfig.BEARER_API_CALLS.matches(apiCall())).isFalse();
+        assertThat(OidcFederationSecurityConfig.apiCalls(true).matches(basic)).isFalse();
+        assertThat(OidcFederationSecurityConfig.apiCalls(true).matches(apiCall())).isFalse();
+    }
+
+    @Test
+    void aloneTakesEveryApiCall() {
+        MockHttpServletRequest basic = apiCall();
+        basic.addHeader("Authorization", "Basic bWlmb3M6cGFzc3dvcmQ=");
+
+        assertThat(OidcFederationSecurityConfig.apiCalls(false).matches(basic)).isTrue();
+        assertThat(OidcFederationSecurityConfig.apiCalls(false).matches(apiCall())).isTrue();
     }
 
     // As CBA-CORE receives an API call: context path /fineract-provider, Jersey servlet mapped to /api/*

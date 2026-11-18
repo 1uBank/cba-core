@@ -285,7 +285,17 @@ Fineract creates an administrator `mifos` with password `password` on a new data
 3. Sign in as one of the named administrators and **disable or delete** the `mifos` user (Admin → Users).
 4. Confirm that signing in with `mifos` / `password` fails, and record the check in the go-live checklist.
 
-When staff sign in through an identity provider, basic-auth sign-in can be switched off entirely with `FINERACT_SECURITY_BASICAUTH_ENABLED=false`.
+### Sign-in modes
+
+Two settings choose how callers sign in to the API:
+
+| Mode | `FINERACT_SECURITY_BASICAUTH_ENABLED` | `FINERACT_SECURITY_OIDC_FEDERATION_ENABLED` | Accepts |
+|---|---|---|---|
+| Basic only | `true` (default) | `false` (default) | Username and password |
+| Both | `true` | `true` | Tokens from the auth service on calls with a Bearer token; username and password on the rest |
+| Auth service only | `false` | `true` | Tokens from the auth service only |
+
+"Both" is for moving staff and services to the auth service: anyone who still has a CBA-CORE password can call the API with it, without MFA. Once everyone signs in through the auth service, use "Auth service only".
 
 ### Releasing a new version
 
