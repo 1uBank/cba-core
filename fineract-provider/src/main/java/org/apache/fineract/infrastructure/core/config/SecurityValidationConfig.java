@@ -32,14 +32,19 @@ public class SecurityValidationConfig {
     @Value("${fineract.security.oauth2.enabled}")
     private Boolean oauthEnabled;
 
+    // OIDC federation (staff and services signing in through an external identity provider) is a scheme of its own:
+    // it may run alone, or alongside basic authentication.
+    @Value("${fineract.security.oidc-federation.enabled:false}")
+    private Boolean oidcFederationEnabled;
+
     @PostConstruct
     public void validate() {
         // NOTE: avoid NPE if these values are not set
-        if (!Boolean.TRUE.equals(basicAuthEnabled) && !Boolean.TRUE.equals(oauthEnabled)) {
+        if (!Boolean.TRUE.equals(basicAuthEnabled) && !Boolean.TRUE.equals(oauthEnabled) && !Boolean.TRUE.equals(oidcFederationEnabled)) {
             // NOTE: while we are already doing consistency checks we might as well cover this case; should not happen
             // as defaults are set in application.properties
             throw new IllegalArgumentException(
-                    "No authentication scheme selected. Please decide if you want to use basic OR OAuth2 authentication.");
+                    "No authentication scheme selected. Please enable basic, OAuth2 or OIDC federation authentication.");
         }
         if (basicAuthEnabled && oauthEnabled) {
             throw new IllegalArgumentException(
