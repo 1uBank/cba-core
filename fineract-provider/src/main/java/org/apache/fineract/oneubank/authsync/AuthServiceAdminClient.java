@@ -29,6 +29,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,12 +70,27 @@ public class AuthServiceAdminClient {
         return Optional.empty();
     }
 
-    /** Creates the user and returns its ID. New users must complete the configured required actions at first login. */
-    public String createUser(StaffAccount account) {
+    /** The ID of the realm's first-login migration, if it is set up. */
+    public Optional<String> findMigrationLinkId() {
+        String path = "/components?type=" + encode("org.keycloak.storage.UserStorageProvider") + "&name="
+                + encode(properties.getMigrationComponentName());
+        JsonNode components = readJson(send(request(path).GET(), 200));
+        if (components.isArray() && !components.isEmpty()) {
+            return Optional.of(components.get(0).get("id").asText());
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Creates the user and returns its ID. New users must complete the configured required actions at first login. With
+     * a migration link, their first sign-in checks the password Fineract holds.
+     */
+    public String createUser(StaffAccount account, Optional<String> migrationLinkId) {
         Map<String, Object> body = representation(account);
         body.put("enabled", account.active());
         body.put("emailVerified", false);
         body.put("requiredActions", properties.getRequiredActions());
+        migrationLinkId.ifPresent(link -> body.put("federationLink", link));
         send(request("/users").POST(jsonBody(body)), 201);
         return findUserId(account.username()).orElseThrow(() -> new AuthSyncException(
                 "User " + account.username() + " was created in the auth service but could not be found afterwards"));
@@ -85,6 +101,75 @@ public class AuthServiceAdminClient {
         Map<String, Object> body = representation(account);
         body.put("enabled", account.active());
         send(request("/users/" + userId).PUT(jsonBody(body)), 204);
+    }
+
+    /**
+     * After an admin sets a new password in Fineract: removes the user's password here and links them to the migration,
+     * so their next sign-in checks the new Fineract password, then asks them to choose their own.
+     */
+    public void requirePasswordFromFineract(String userId, String migrationLinkId) {
+        JsonNode credentials = readJson(send(request("/users/" + userId + "/credentials").GET(), 200));
+        for (JsonNode credential : credentials) {
+            if ("password".equals(credential.path("type").asText())) {
+                send(request("/users/" + userId + "/credentials/" + encode(credential.get("id").asText())).DELETE(), 204);
+            }
+        }
+        JsonNode user = readJson(send(request("/users/" + userId).GET(), 200));
+        List<String> requiredActions = new ArrayList<>();
+        user.path("requiredActions").forEach(action -> requiredActions.add(action.asText()));
+        if (!requiredActions.contains("UPDATE_PASSWORD")) {
+            requiredActions.add("UPDATE_PASSWORD");
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("federationLink", migrationLinkId);
+        body.put("requiredActions", requiredActions);
+        send(request("/users/" + userId).PUT(jsonBody(body)), 204);
+    }
+
+    /** Whether the user has set up an authenticator app. */
+    public boolean hasAuthenticator(String userId) {
+        JsonNode credentials = readJson(send(request("/users/" + userId + "/credentials").GET(), 200));
+        for (JsonNode credential : credentials) {
+            if ("otp".equals(credential.path("type").asText())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether sign-in is locked for the user after too many failed attempts. */
+    public boolean isLockedOut(String userId) {
+        JsonNode status = readJson(send(request("/attack-detection/brute-force/users/" + userId).GET(), 200));
+        return status.path("disabled").asBoolean(false);
+    }
+
+    /**
+     * Removes the user's authenticator app, for example after a lost phone. They set up a new one at their next
+     * sign-in, after their password.
+     */
+    public void resetAuthenticator(String userId) {
+        JsonNode credentials = readJson(send(request("/users/" + userId + "/credentials").GET(), 200));
+        for (JsonNode credential : credentials) {
+            if ("otp".equals(credential.path("type").asText())) {
+                send(request("/users/" + userId + "/credentials/" + encode(credential.get("id").asText())).DELETE(), 204);
+            }
+        }
+        addRequiredAction(userId, "CONFIGURE_TOTP");
+    }
+
+    /** Lifts the lock set after too many failed sign-in attempts. */
+    public void unlock(String userId) {
+        send(request("/attack-detection/brute-force/users/" + userId).DELETE(), 204);
+    }
+
+    private void addRequiredAction(String userId, String action) {
+        JsonNode user = readJson(send(request("/users/" + userId).GET(), 200));
+        List<String> requiredActions = new ArrayList<>();
+        user.path("requiredActions").forEach(existing -> requiredActions.add(existing.asText()));
+        if (!requiredActions.contains(action)) {
+            requiredActions.add(action);
+        }
+        send(request("/users/" + userId).PUT(jsonBody(Map.of("requiredActions", requiredActions))), 204);
     }
 
     /** Ends all of the user's sessions, so a disabled user is signed out at once. */

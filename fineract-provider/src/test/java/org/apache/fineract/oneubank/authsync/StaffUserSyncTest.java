@@ -48,13 +48,48 @@ class StaffUserSyncTest {
     }
 
     @Test
-    void createdUserIsCreatedInTheAuthService() {
+    void createdUserIsCreatedInTheAuthServiceLinkedToTheMigration() {
         when(authService.findUserId("ada")).thenReturn(Optional.empty());
-        when(authService.createUser(ADA)).thenReturn("kc-1");
+        when(authService.findMigrationLinkId()).thenReturn(Optional.of("migration-1"));
+        when(authService.createUser(ADA, Optional.of("migration-1"))).thenReturn("kc-1");
 
         sync.created(ADA);
 
-        verify(authService).createUser(ADA);
+        verify(authService).createUser(ADA, Optional.of("migration-1"));
+    }
+
+    @Test
+    void passwordChangedInFineractIsCheckedAtTheNextSignIn() {
+        when(authService.findUserId("ada")).thenReturn(Optional.of("kc-1"));
+        when(authService.findMigrationLinkId()).thenReturn(Optional.of("migration-1"));
+
+        sync.passwordChanged(ADA);
+
+        verify(authService).requirePasswordFromFineract("kc-1", "migration-1");
+        verify(authService).signOut("kc-1");
+    }
+
+    @Test
+    void passwordChangedForAUserMissingFromTheAuthServiceCreatesThem() {
+        when(authService.findUserId("ada")).thenReturn(Optional.empty());
+        when(authService.findMigrationLinkId()).thenReturn(Optional.of("migration-1"));
+        when(authService.createUser(ADA, Optional.of("migration-1"))).thenReturn("kc-1");
+
+        sync.passwordChanged(ADA);
+
+        verify(authService).createUser(ADA, Optional.of("migration-1"));
+        verify(authService, never()).requirePasswordFromFineract(anyString(), anyString());
+    }
+
+    @Test
+    void passwordChangedWithoutTheMigrationLeavesTheAuthServicePasswordAlone() {
+        when(authService.findUserId("ada")).thenReturn(Optional.of("kc-1"));
+        when(authService.findMigrationLinkId()).thenReturn(Optional.empty());
+
+        sync.passwordChanged(ADA);
+
+        verify(authService, never()).requirePasswordFromFineract(anyString(), anyString());
+        verify(authService, never()).signOut(anyString());
     }
 
     @Test
@@ -64,7 +99,7 @@ class StaffUserSyncTest {
         sync.created(ADA);
 
         verify(authService).updateUser("kc-1", ADA);
-        verify(authService, never()).createUser(any());
+        verify(authService, never()).createUser(any(), any());
     }
 
     @Test

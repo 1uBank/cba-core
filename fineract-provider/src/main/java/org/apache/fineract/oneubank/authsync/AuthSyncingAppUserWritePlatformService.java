@@ -57,8 +57,14 @@ public class AuthSyncingAppUserWritePlatformService implements AppUserWritePlatf
     public CommandProcessingResult updateUser(Long userId, JsonCommand command) {
         Optional<StaffAccount> before = load(userId);
         CommandProcessingResult result = delegate.updateUser(userId, command);
-        load(userId)
-                .ifPresent(after -> afterCommit(() -> sync.updated(before.map(StaffAccount::username).orElse(after.username()), after)));
+        // The portal changes a password through this update, with a "password" field.
+        boolean passwordChanged = command.parameterExists("password");
+        load(userId).ifPresent(after -> afterCommit(() -> {
+            sync.updated(before.map(StaffAccount::username).orElse(after.username()), after);
+            if (passwordChanged) {
+                sync.passwordChanged(after);
+            }
+        }));
         return result;
     }
 
@@ -73,8 +79,12 @@ public class AuthSyncingAppUserWritePlatformService implements AppUserWritePlatf
 
     @Override
     public CommandProcessingResult changeUserPassword(Long userId, JsonCommand command) {
-        // Staff passwords live in the auth service. Fineract's own password is kept as it is.
-        return delegate.changeUserPassword(userId, command);
+        // Staff sign in with their auth-service password. Their next sign-in checks this new Fineract password, then
+        // asks
+        // them to choose their own.
+        CommandProcessingResult result = delegate.changeUserPassword(userId, command);
+        load(userId).ifPresent(account -> afterCommit(() -> sync.passwordChanged(account)));
+        return result;
     }
 
     private Optional<StaffAccount> load(Long userId) {

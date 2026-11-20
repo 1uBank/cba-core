@@ -44,6 +44,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -219,6 +220,16 @@ public class OidcFederationSecurityConfig {
     public OidcTenantAwareFilter oidcTenantAwareFilter() {
         return new OidcTenantAwareFilter(new DefaultBearerTokenResolver(), tenantDetailsService, fineractProperties,
                 tenantOidcConfigService);
+    }
+
+    // A Filter @Bean is also registered by Spring Boot as a servlet filter, which runs inside the security chain and
+    // clears the tenant when the request is done: before IdempotencyStoreFilter saves the command result, so every
+    // write failed. The filter must run only where oidcFederationFilterChain places it.
+    @Bean
+    public FilterRegistrationBean<OidcTenantAwareFilter> oidcTenantAwareFilterServletRegistration(OidcTenantAwareFilter filter) {
+        FilterRegistrationBean<OidcTenantAwareFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     // -------------------------------------------------------------------------
