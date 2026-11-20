@@ -67,6 +67,13 @@ public class AuthSyncProperties {
      */
     private String migratorUsername = "service-account-user-migrator";
 
+    /**
+     * Name of the auth service's first-login migration in the realm. New staff, and staff whose password an admin
+     * resets, are linked to it, so their next sign-in checks the password Fineract holds before asking them to choose
+     * their own.
+     */
+    private String migrationComponentName = "cba-core-user-migration";
+
     /** Timeout for each call to the auth service, in seconds. */
     private int timeoutSeconds = 10;
 }

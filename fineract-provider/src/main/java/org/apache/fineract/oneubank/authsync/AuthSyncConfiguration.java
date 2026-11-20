@@ -66,6 +66,12 @@ public class AuthSyncConfiguration {
                 passwordEncoder.getIfAvailable(PasswordEncoderFactories::createDelegatingPasswordEncoder), properties);
     }
 
+    @Bean
+    public StaffSignInApiResource staffSignInApiResource(PlatformSecurityContext context, AppUserRepository appUserRepository,
+            AuthServiceAdminClient authServiceAdminClient) {
+        return new StaffSignInApiResource(context, appUserRepository, authServiceAdminClient);
+    }
+
     /**
      * Wraps Fineract's user service once Spring has built it, including its transaction proxy. Dependencies are looked
      * up lazily so the post-processor does not force other beans to be created early.

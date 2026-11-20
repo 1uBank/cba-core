@@ -53,7 +53,7 @@ public class StaffUserSync {
                 authService.updateUser(userId, account);
                 log.info("Staff user {} already existed in the auth service and was updated", account.username());
             } else {
-                userId = authService.createUser(account);
+                userId = authService.createUser(account, migrationLink());
                 log.info("Staff user {} created in the auth service", account.username());
             }
             if (properties.isSendSetupEmail()) {
@@ -107,6 +107,44 @@ public class StaffUserSync {
             log.error("Staff user {} was deleted in Fineract but is still enabled in the auth service: {}",
                     accountBeforeDeletion.username(), e.getMessage());
         }
+    }
+
+    /**
+     * An admin set a new password for a staff user in Fineract. Their next sign-in checks it, then asks them to choose
+     * their own. Fineract does not pass the password on: the auth service checks it with Fineract at sign-in.
+     */
+    public void passwordChanged(StaffAccount account) {
+        if (isServiceAccount(account.username())) {
+            return;
+        }
+        try {
+            Optional<String> userId = authService.findUserId(account.username());
+            if (userId.isEmpty()) {
+                created(account);
+                return;
+            }
+            Optional<String> link = migrationLink();
+            if (link.isEmpty()) {
+                log.error("Staff user {} had their password changed in Fineract, but the auth service has no {} to check it with; "
+                        + "their auth-service password is unchanged", account.username(), properties.getMigrationComponentName());
+                return;
+            }
+            authService.requirePasswordFromFineract(userId.get(), link.get());
+            authService.signOut(userId.get());
+            log.info("Staff user {} must sign in with their new password and then choose their own", account.username());
+        } catch (AuthSyncException e) {
+            log.error("Staff user {} had their password changed in Fineract but not in the auth service: {}", account.username(),
+                    e.getMessage());
+        }
+    }
+
+    private Optional<String> migrationLink() {
+        Optional<String> link = authService.findMigrationLinkId();
+        if (link.isEmpty()) {
+            log.warn("The auth service has no {}; new staff need the setup email to set their first password",
+                    properties.getMigrationComponentName());
+        }
+        return link;
     }
 
     private boolean isServiceAccount(String username) {

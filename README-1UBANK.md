@@ -408,7 +408,20 @@ Accepted uploads are limited by `FINERACT_CONTENT_REGEX_WHITELIST` and `FINERACT
 
 **Auth service** (code in `fineract-provider`, package `org.apache.fineract.oneubank.authsync`)
 
-Admins keep creating, editing and deleting staff in Fineract's user screen. After each change is saved, this module creates, updates or disables the same staff user in the auth service (`cba-auth`, realm `cba`). It also provides the endpoints the auth service uses to move existing staff across at their first login, keeping their current password (`/v1/oneubank/staff-migration`, callable only by the Fineract user `service-account-user-migrator`).
+Admins keep creating, editing and deleting staff in Fineract's user screen. After each change is saved, this module creates, updates or disables the same staff user in the auth service (`cba-auth`, realm `cba`):
+
+- **New staff** are created there linked to the auth service's first-login migration: their first sign-in checks the password the admin set here, then they choose their own and set up an authenticator app.
+- **A password an admin sets here** (the portal's Reset Password) works the same way: the staff member is signed out, their next sign-in checks the new password, then they choose their own.
+- **Disabled or deleted staff** are disabled there and signed out.
+
+It also provides:
+
+| Endpoint | For | Permission |
+|---|---|---|
+| `/v1/oneubank/staff-migration/{username}` and `/verify` | The auth service, to move existing staff across at their first login | Only the Fineract user `service-account-user-migrator` |
+| `GET /v1/oneubank/staff/{userId}/sign-in` | The portal: whether the staff member has an authenticator app and is locked out | `READ_USER` |
+| `POST /v1/oneubank/staff/{userId}/sign-in/reset-authenticator` | The portal: removes the authenticator app (lost phone); a new one is set up at the next sign-in | `UPDATE_USER` |
+| `POST /v1/oneubank/staff/{userId}/sign-in/unlock` | The portal: lifts the lock-out after too many failed sign-ins | `UPDATE_USER` |
 
 | Variable | Value | Secret |
 |---|---|---|
@@ -422,6 +435,7 @@ Admins keep creating, editing and deleting staff in Fineract's user screen. Afte
 | `ONEUBANK_AUTHSYNC_TIMEOUTSECONDS` | `10` (default) | |
 | `ONEUBANK_AUTHSYNC_REQUIREDACTIONS` | `UPDATE_PASSWORD,CONFIGURE_TOTP` (default): what a new staff member must do at first sign-in | |
 | `ONEUBANK_AUTHSYNC_SERVICEACCOUNTPREFIX` | `service-account-` (default): usernames that are never synced | |
+| `ONEUBANK_AUTHSYNC_MIGRATIONCOMPONENTNAME` | `cba-core-user-migration` (default): the auth service's first-login migration, which new staff are linked to. `user-provisioner` needs the `view-realm` role to find it | |
 
 These settings and their defaults are also listed in `fineract-provider/src/main/resources/application.properties`, under `oneubank.auth-sync.*`.
 
