@@ -19,11 +19,13 @@
 package org.apache.fineract.infrastructure.security.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import jakarta.servlet.http.MappingMatch;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.stream.Stream;
+import org.apache.fineract.infrastructure.security.filter.OidcTenantAwareFilter;
 import org.apache.fineract.infrastructure.security.service.FineractOidcUserService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -94,6 +96,15 @@ class OidcFederationSecurityConfigConditionalTest {
         request.setPathInfo("/v1/offices");
         request.setHttpServletMapping(new MockHttpServletMapping("v1/offices", "/api/*", "jerseyServlet", MappingMatch.PATH));
         return request;
+    }
+
+    @Test
+    void tenantFilterIsNotAlsoAServletFilter() {
+        // As a servlet filter it cleared the tenant before IdempotencyStoreFilter saved the command result: every
+        // write failed with OIDC federation enabled.
+        var registration = new OidcFederationSecurityConfig().oidcTenantAwareFilterServletRegistration(mock(OidcTenantAwareFilter.class));
+
+        assertThat(registration.isEnabled()).isFalse();
     }
 
     @Test
