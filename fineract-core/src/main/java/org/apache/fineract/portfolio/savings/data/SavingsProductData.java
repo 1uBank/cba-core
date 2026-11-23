@@ -115,6 +115,14 @@ public final class SavingsProductData implements Serializable {
     private final Long daysToDormancy;
     private final Long daysToEscheat;
 
+    // 1UBank: see SavingsProductOneUBankParams
+    @Getter
+    @Setter
+    private String nubanPrefix;
+    @Getter
+    @Setter
+    private boolean enforceTierLimits;
+
     public static SavingsProductData template(final CurrencyData currency, final EnumOptionData interestCompoundingPeriodType,
             final EnumOptionData interestPostingPeriodType, final EnumOptionData interestCalculationType,
             final EnumOptionData interestCalculationDaysInYearType, final EnumOptionData accountingRule,
@@ -171,21 +179,22 @@ public final class SavingsProductData implements Serializable {
     }
 
     public static SavingsProductData withCharges(final SavingsProductData product, final Collection<ChargeData> charges) {
-        return new SavingsProductData(product.id, product.name, product.shortName, product.description, product.currency,
-                product.nominalAnnualInterestRate, product.interestCompoundingPeriodType, product.interestPostingPeriodType,
-                product.interestCalculationType, product.interestCalculationDaysInYearType, product.minRequiredOpeningBalance,
-                product.lockinPeriodFrequency, product.lockinPeriodFrequencyType, product.withdrawalFeeForTransfers, product.accountingRule,
-                product.accountingMappings, product.paymentChannelToFundSourceMappings, product.currencyOptions,
-                product.interestCompoundingPeriodTypeOptions, product.interestPostingPeriodTypeOptions,
-                product.interestCalculationTypeOptions, product.interestCalculationDaysInYearTypeOptions,
-                product.lockinPeriodFrequencyTypeOptions, product.withdrawalFeeTypeOptions, product.paymentTypeOptions,
-                product.accountingRuleOptions, product.accountingMappingOptions, charges, product.chargeOptions, product.penaltyOptions,
-                product.feeToIncomeAccountMappings, product.penaltyToIncomeAccountMappings, product.allowOverdraft, product.overdraftLimit,
-                product.minRequiredBalance, product.enforceMinRequiredBalance, product.maxAllowedLienLimit, product.lienAllowed,
-                product.minBalanceForInterestCalculation, product.nominalAnnualInterestRateOverdraft,
-                product.minOverdraftForInterestCalculation, product.withHoldTax, product.taxGroup, product.taxGroupOptions,
-                product.isDormancyTrackingActive, product.daysToInactive, product.daysToDormancy, product.daysToEscheat,
-                product.accountMappingForPayment);
+        return withOneUBankFields(product,
+                new SavingsProductData(product.id, product.name, product.shortName, product.description, product.currency,
+                        product.nominalAnnualInterestRate, product.interestCompoundingPeriodType, product.interestPostingPeriodType,
+                        product.interestCalculationType, product.interestCalculationDaysInYearType, product.minRequiredOpeningBalance,
+                        product.lockinPeriodFrequency, product.lockinPeriodFrequencyType, product.withdrawalFeeForTransfers,
+                        product.accountingRule, product.accountingMappings, product.paymentChannelToFundSourceMappings,
+                        product.currencyOptions, product.interestCompoundingPeriodTypeOptions, product.interestPostingPeriodTypeOptions,
+                        product.interestCalculationTypeOptions, product.interestCalculationDaysInYearTypeOptions,
+                        product.lockinPeriodFrequencyTypeOptions, product.withdrawalFeeTypeOptions, product.paymentTypeOptions,
+                        product.accountingRuleOptions, product.accountingMappingOptions, charges, product.chargeOptions,
+                        product.penaltyOptions, product.feeToIncomeAccountMappings, product.penaltyToIncomeAccountMappings,
+                        product.allowOverdraft, product.overdraftLimit, product.minRequiredBalance, product.enforceMinRequiredBalance,
+                        product.maxAllowedLienLimit, product.lienAllowed, product.minBalanceForInterestCalculation,
+                        product.nominalAnnualInterestRateOverdraft, product.minOverdraftForInterestCalculation, product.withHoldTax,
+                        product.taxGroup, product.taxGroupOptions, product.isDormancyTrackingActive, product.daysToInactive,
+                        product.daysToDormancy, product.daysToEscheat, product.accountMappingForPayment));
     }
 
     /**
@@ -202,21 +211,22 @@ public final class SavingsProductData implements Serializable {
             final Map<String, List<GLAccountData>> accountingMappingOptions, final Collection<ChargeData> chargeOptions,
             final Collection<ChargeData> penaltyOptions, Collection<TaxGroupData> taxGroupOptions, final String accountMappingForPayment) {
 
-        return new SavingsProductData(existingProduct.id, existingProduct.name, existingProduct.shortName, existingProduct.description,
-                existingProduct.currency, existingProduct.nominalAnnualInterestRate, existingProduct.interestCompoundingPeriodType,
-                existingProduct.interestPostingPeriodType, existingProduct.interestCalculationType,
-                existingProduct.interestCalculationDaysInYearType, existingProduct.minRequiredOpeningBalance,
-                existingProduct.lockinPeriodFrequency, existingProduct.lockinPeriodFrequencyType, existingProduct.withdrawalFeeForTransfers,
-                existingProduct.accountingRule, existingProduct.accountingMappings, existingProduct.paymentChannelToFundSourceMappings,
-                currencyOptions, interestCompoundingPeriodTypeOptions, interestPostingPeriodTypeOptions, interestCalculationTypeOptions,
-                interestCalculationDaysInYearTypeOptions, lockinPeriodFrequencyTypeOptions, withdrawalFeeTypeOptions, paymentTypeOptions,
-                accountingRuleOptions, accountingMappingOptions, existingProduct.charges, chargeOptions, penaltyOptions,
+        return withOneUBankFields(existingProduct, new SavingsProductData(existingProduct.id, existingProduct.name,
+                existingProduct.shortName, existingProduct.description, existingProduct.currency, existingProduct.nominalAnnualInterestRate,
+                existingProduct.interestCompoundingPeriodType, existingProduct.interestPostingPeriodType,
+                existingProduct.interestCalculationType, existingProduct.interestCalculationDaysInYearType,
+                existingProduct.minRequiredOpeningBalance, existingProduct.lockinPeriodFrequency, existingProduct.lockinPeriodFrequencyType,
+                existingProduct.withdrawalFeeForTransfers, existingProduct.accountingRule, existingProduct.accountingMappings,
+                existingProduct.paymentChannelToFundSourceMappings, currencyOptions, interestCompoundingPeriodTypeOptions,
+                interestPostingPeriodTypeOptions, interestCalculationTypeOptions, interestCalculationDaysInYearTypeOptions,
+                lockinPeriodFrequencyTypeOptions, withdrawalFeeTypeOptions, paymentTypeOptions, accountingRuleOptions,
+                accountingMappingOptions, existingProduct.charges, chargeOptions, penaltyOptions,
                 existingProduct.feeToIncomeAccountMappings, existingProduct.penaltyToIncomeAccountMappings, existingProduct.allowOverdraft,
                 existingProduct.overdraftLimit, existingProduct.minRequiredBalance, existingProduct.enforceMinRequiredBalance,
                 existingProduct.maxAllowedLienLimit, existingProduct.lienAllowed, existingProduct.minBalanceForInterestCalculation,
                 existingProduct.nominalAnnualInterestRateOverdraft, existingProduct.minOverdraftForInterestCalculation,
                 existingProduct.withHoldTax, existingProduct.taxGroup, taxGroupOptions, existingProduct.isDormancyTrackingActive,
-                existingProduct.daysToInactive, existingProduct.daysToDormancy, existingProduct.daysToEscheat, accountMappingForPayment);
+                existingProduct.daysToInactive, existingProduct.daysToDormancy, existingProduct.daysToEscheat, accountMappingForPayment));
     }
 
     public static SavingsProductData withAccountingDetails(final SavingsProductData existingProduct,
@@ -237,22 +247,22 @@ public final class SavingsProductData implements Serializable {
         final Collection<ChargeData> chargeOptions = null;
         final Collection<ChargeData> penaltyOptions = null;
 
-        return new SavingsProductData(existingProduct.id, existingProduct.name, existingProduct.shortName, existingProduct.description,
-                existingProduct.currency, existingProduct.nominalAnnualInterestRate, existingProduct.interestCompoundingPeriodType,
-                existingProduct.interestPostingPeriodType, existingProduct.interestCalculationType,
-                existingProduct.interestCalculationDaysInYearType, existingProduct.minRequiredOpeningBalance,
-                existingProduct.lockinPeriodFrequency, existingProduct.lockinPeriodFrequencyType, existingProduct.withdrawalFeeForTransfers,
-                existingProduct.accountingRule, accountingMappings, paymentChannelToFundSourceMappings, currencyOptions,
-                interestCompoundingPeriodTypeOptions, interestPostingPeriodTypeOptions, interestCalculationTypeOptions,
-                interestCalculationDaysInYearTypeOptions, lockinPeriodFrequencyTypeOptions, withdrawalFeeTypeOptions, paymentTypeOptions,
-                accountingRuleOptions, accountingMappingOptions, existingProduct.charges, chargeOptions, penaltyOptions,
-                feeToIncomeAccountMappings, penaltyToIncomeAccountMappings, existingProduct.allowOverdraft, existingProduct.overdraftLimit,
-                existingProduct.minRequiredBalance, existingProduct.enforceMinRequiredBalance, existingProduct.maxAllowedLienLimit,
-                existingProduct.lienAllowed, existingProduct.minBalanceForInterestCalculation,
+        return withOneUBankFields(existingProduct, new SavingsProductData(existingProduct.id, existingProduct.name,
+                existingProduct.shortName, existingProduct.description, existingProduct.currency, existingProduct.nominalAnnualInterestRate,
+                existingProduct.interestCompoundingPeriodType, existingProduct.interestPostingPeriodType,
+                existingProduct.interestCalculationType, existingProduct.interestCalculationDaysInYearType,
+                existingProduct.minRequiredOpeningBalance, existingProduct.lockinPeriodFrequency, existingProduct.lockinPeriodFrequencyType,
+                existingProduct.withdrawalFeeForTransfers, existingProduct.accountingRule, accountingMappings,
+                paymentChannelToFundSourceMappings, currencyOptions, interestCompoundingPeriodTypeOptions, interestPostingPeriodTypeOptions,
+                interestCalculationTypeOptions, interestCalculationDaysInYearTypeOptions, lockinPeriodFrequencyTypeOptions,
+                withdrawalFeeTypeOptions, paymentTypeOptions, accountingRuleOptions, accountingMappingOptions, existingProduct.charges,
+                chargeOptions, penaltyOptions, feeToIncomeAccountMappings, penaltyToIncomeAccountMappings, existingProduct.allowOverdraft,
+                existingProduct.overdraftLimit, existingProduct.minRequiredBalance, existingProduct.enforceMinRequiredBalance,
+                existingProduct.maxAllowedLienLimit, existingProduct.lienAllowed, existingProduct.minBalanceForInterestCalculation,
                 existingProduct.nominalAnnualInterestRateOverdraft, existingProduct.minOverdraftForInterestCalculation,
                 existingProduct.withHoldTax, existingProduct.taxGroup, existingProduct.taxGroupOptions,
                 existingProduct.isDormancyTrackingActive, existingProduct.daysToInactive, existingProduct.daysToDormancy,
-                existingProduct.daysToEscheat, existingProduct.accountMappingForPayment);
+                existingProduct.daysToEscheat, existingProduct.accountMappingForPayment));
     }
 
     public static SavingsProductData instance(final Long id, final String name, final String shortName, final String description,
@@ -298,6 +308,13 @@ public final class SavingsProductData implements Serializable {
                 minRequiredBalance, enforceMinRequiredBalance, maxAllowedLienLimit, lienAllowed, minBalanceForInterestCalculation,
                 nominalAnnualInterestRateOverdraft, minOverdraftForInterestCalculation, withHoldTax, taxGroup, taxGroupOptions,
                 isDormancyTrackingActive, daysToInactive, daysToDormancy, daysToEscheat, accountMappingForPayment);
+    }
+
+    // 1UBank: keeps our product fields when a copy is made with more data
+    private static SavingsProductData withOneUBankFields(final SavingsProductData from, final SavingsProductData to) {
+        to.nubanPrefix = from.nubanPrefix;
+        to.enforceTierLimits = from.enforceTierLimits;
+        return to;
     }
 
     public static SavingsProductData lookup(final Long id, final String name) {

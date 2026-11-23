@@ -1,0 +1,1093 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    1UBank: what CBA-CORE stores about customers beyond Fineract's own client fields.
+
+    - Code values: identifier types (BVN, NIN, CAC registration number), address types, Nigerian states, countries,
+      TP's credit-bureau codes, KYC levels, risk ratings and related-person roles.
+    - The address module, on, with address type and first line required.
+    - Datatables, created exactly as Fineract's create-datatable API creates them (table, keys, permissions):
+      TP's three credit-bureau tables (same names, columns and codes as TP, for parity and migration), and
+      Customer KYC, Customer Limits, Customer Risk, Customer Owner (all customers) and Related Persons (directors and
+      signatories). Customer Owner holds the API client the customer belongs to (for example app); the Banking API
+      shows a client only its own customers, and staff can see and change it in the portal.
+      The create API insists on PERSON or ENTITY for customer datatables; the three that apply to every customer
+      have no subtype, which Fineract reads as "every customer".
+    - The Banking API's access to the 1UBank datatables (not the credit-bureau ones, which staff fill in).
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    <changeSet id="oneubank-0004-code-customer_identifier" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('BVN', 1),
+                    ('NIN', 2),
+                    ('CAC Registration Number', 3),
+                    ('TIN', 4)) AS v (value, position)
+            WHERE c.code_name = 'Customer Identifier'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-address_type" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('Residential', 1),
+                    ('Business', 2)) AS v (value, position)
+            WHERE c.code_name = 'ADDRESS_TYPE'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-state" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('Abia', 1),
+                    ('Adamawa', 2),
+                    ('Akwa Ibom', 3),
+                    ('Anambra', 4),
+                    ('Bauchi', 5),
+                    ('Bayelsa', 6),
+                    ('Benue', 7),
+                    ('Borno', 8),
+                    ('Cross River', 9),
+                    ('Delta', 10),
+                    ('Ebonyi', 11),
+                    ('Edo', 12),
+                    ('Ekiti', 13),
+                    ('Enugu', 14),
+                    ('Federal Capital Territory', 15),
+                    ('Gombe', 16),
+                    ('Imo', 17),
+                    ('Jigawa', 18),
+                    ('Kaduna', 19),
+                    ('Kano', 20),
+                    ('Katsina', 21),
+                    ('Kebbi', 22),
+                    ('Kogi', 23),
+                    ('Kwara', 24),
+                    ('Lagos', 25),
+                    ('Nasarawa', 26),
+                    ('Niger', 27),
+                    ('Ogun', 28),
+                    ('Ondo', 29),
+                    ('Osun', 30),
+                    ('Oyo', 31),
+                    ('Plateau', 32),
+                    ('Rivers', 33),
+                    ('Sokoto', 34),
+                    ('Taraba', 35),
+                    ('Yobe', 36),
+                    ('Zamfara', 37)) AS v (value, position)
+            WHERE c.code_name = 'STATE'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-country" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('Andorra', 1),
+                    ('United Arab Emirates', 2),
+                    ('Afghanistan', 3),
+                    ('Antigua and Barbuda', 4),
+                    ('Anguilla', 5),
+                    ('Albania', 6),
+                    ('Armenia', 7),
+                    ('Netherlands Antilles', 8),
+                    ('Angola', 9),
+                    ('Antarctica', 10),
+                    ('Argentina', 11),
+                    ('American Samoa', 12),
+                    ('Austria', 13),
+                    ('Australia', 14),
+                    ('Aruba', 15),
+                    ('Åland Islands', 16),
+                    ('Azerbaijan', 17),
+                    ('Bosnia and Herzegovina', 18),
+                    ('Barbados', 19),
+                    ('Bangladesh', 20),
+                    ('Belgium', 21),
+                    ('Burkina Faso', 22),
+                    ('Bulgaria', 23),
+                    ('Bahrain', 24),
+                    ('Burundi', 25),
+                    ('Benin', 26),
+                    ('Saint Barthélemy', 27),
+                    ('Bermuda', 28),
+                    ('Brunei Darussalam', 29),
+                    ('Bolivia', 30),
+                    ('Brazil', 31),
+                    ('Bahamas', 32),
+                    ('Bhutan', 33),
+                    ('Bouvet Island', 34),
+                    ('Botswana', 35),
+                    ('Belarus', 36),
+                    ('Belize', 37),
+                    ('Canada', 38),
+                    ('Cocos (Keeling) Islands', 39),
+                    ('Congo, The Democratic Republic of The', 40),
+                    ('Zaire', 41),
+                    ('Central African Republic', 42),
+                    ('Congo', 43),
+                    ('Switzerland', 44),
+                    ('Côte d''ivoire', 45),
+                    ('Cook islands', 46),
+                    ('Chile', 47),
+                    ('Cameroon', 48),
+                    ('China', 49),
+                    ('Colombia', 50),
+                    ('Costa Rica', 51),
+                    ('Cuba', 52),
+                    ('Cape Verde', 53),
+                    ('Christmas Island', 54),
+                    ('Cyprus', 55),
+                    ('Czech Republic', 56),
+                    ('Germany', 57),
+                    ('Djibouti', 58),
+                    ('Denmark', 59),
+                    ('Dominica', 60),
+                    ('Dominican Republic', 61),
+                    ('Algeria', 62),
+                    ('Ecuador', 63),
+                    ('Estonia', 64),
+                    ('Egypt', 65),
+                    ('Western Sahara', 66),
+                    ('Eritrea', 67),
+                    ('Spain', 68),
+                    ('Ethiopia', 69),
+                    ('Finland', 70),
+                    ('Fiji', 71),
+                    ('Falkland Islands (Malvinas)', 72),
+                    ('Micronesia, Federated States of', 73),
+                    ('Faroe Islands', 74),
+                    ('France', 75),
+                    ('Gabon', 76),
+                    ('United Kingdom', 77),
+                    ('Grenada', 78),
+                    ('Georgia', 79),
+                    ('French Guiana', 80),
+                    ('Guernsey', 81),
+                    ('Ghana', 82),
+                    ('Gibraltar', 83),
+                    ('Greenland', 84),
+                    ('Gambia', 85),
+                    ('Guinea', 86),
+                    ('Guadeloupe', 87),
+                    ('Equatorial Guinea', 88),
+                    ('Greece', 89),
+                    ('South Georgia and the south sandwich islands', 90),
+                    ('Guatemala', 91),
+                    ('Guam', 92),
+                    ('Guinea-Bissau', 93),
+                    ('Guyana', 94),
+                    ('Hong Kong', 95),
+                    ('Heard Island and McDonald Islands', 96),
+                    ('Honduras', 97),
+                    ('Croatia', 98),
+                    ('Haiti', 99),
+                    ('Hungary', 100),
+                    ('Indonesia', 101),
+                    ('Ireland', 102),
+                    ('Israel', 103),
+                    ('Isle of Man', 104),
+                    ('India', 105),
+                    ('British Indian Ocean Territory', 106),
+                    ('Iraq', 107),
+                    ('Iran, Islamic Republic of', 108),
+                    ('Iceland', 109),
+                    ('Italy', 110),
+                    ('Jersey', 111),
+                    ('Jamaica', 112),
+                    ('Jordan', 113),
+                    ('Japan', 114),
+                    ('Kenya', 115),
+                    ('Kyrgyzstan', 116),
+                    ('Cambodia', 117),
+                    ('Kiribati', 118),
+                    ('Comoros', 119),
+                    ('Saint Kitts and Nevis', 120),
+                    ('Korea, Democratic People''s Republic of', 121),
+                    ('Korea, Republic of', 122),
+                    ('Kuwait', 123),
+                    ('Cayman Islands', 124),
+                    ('Kazakhstan', 125),
+                    ('Lao People''s Democratic Republic', 126),
+                    ('Lebanon', 127),
+                    ('Saint Lucia', 128),
+                    ('Liechtenstein', 129),
+                    ('Sri Lanka', 130),
+                    ('Liberia', 131),
+                    ('Lesotho', 132),
+                    ('Lithuania', 133),
+                    ('Luxembourg', 134),
+                    ('Latvia', 135),
+                    ('Libyan Arab Jamahiriya', 136),
+                    ('Morocco', 137),
+                    ('Monaco', 138),
+                    ('Moldova, Republic of', 139),
+                    ('Montenegro', 140),
+                    ('Saint Martin', 141),
+                    ('Madagascar', 142),
+                    ('Marshall islands', 143),
+                    ('Macedonia, the former Yugoslav Republic of', 144),
+                    ('Mali', 145),
+                    ('Myanmar', 146),
+                    ('Mongolia', 147),
+                    ('Macao', 148),
+                    ('Northern Mariana Islands', 149),
+                    ('Martinique', 150),
+                    ('Mauritania', 151),
+                    ('Montserrat', 152),
+                    ('Malta', 153),
+                    ('Mauritius', 154),
+                    ('Maldives', 155),
+                    ('Malawi', 156),
+                    ('Mexico', 157),
+                    ('Malaysia', 158),
+                    ('Mozambique', 159),
+                    ('Namibia', 160),
+                    ('New Caledonia', 161),
+                    ('Niger', 162),
+                    ('Norfolk Island', 163),
+                    ('Nigeria', 164),
+                    ('Nicaragua', 165),
+                    ('Netherlands', 166),
+                    ('Norway', 167),
+                    ('Nepal', 168),
+                    ('Nauru', 169),
+                    ('Niue', 170),
+                    ('New Zealand', 171),
+                    ('Oman', 172),
+                    ('Panama', 173),
+                    ('Peru', 174),
+                    ('French Polynesia', 175),
+                    ('Papua New Guinea', 176),
+                    ('Philippines', 177),
+                    ('Pakistan', 178),
+                    ('Poland', 179),
+                    ('Saint Pierre and Miquelon', 180),
+                    ('Pitcairn', 181),
+                    ('Puerto Rico', 182),
+                    ('Palestinian Territory, occupied', 183),
+                    ('Portugal', 184),
+                    ('Palau', 185),
+                    ('Paraguay', 186),
+                    ('Qatar', 187),
+                    ('Réunion', 188),
+                    ('Romania', 189),
+                    ('Serbia', 190),
+                    ('Russian Federation', 191),
+                    ('Rwanda', 192),
+                    ('Saudi Arabia', 193),
+                    ('Solomon islands', 194),
+                    ('Seychelles', 195),
+                    ('Sudan', 196),
+                    ('Sweden', 197),
+                    ('Singapore', 198),
+                    ('Saint Helena', 199),
+                    ('Slovenia', 200),
+                    ('Svalbard and Jan Mayen', 201),
+                    ('Slovakia', 202),
+                    ('Sierra Leone', 203),
+                    ('San Marino', 204),
+                    ('Senegal', 205),
+                    ('Somalia', 206),
+                    ('Suriname', 207),
+                    ('Sao Tome and Principe', 208),
+                    ('El Salvador', 209),
+                    ('Syrian Arab Republic', 210),
+                    ('Swaziland', 211),
+                    ('Turks and Caicos islands', 212),
+                    ('Chad', 213),
+                    ('French Southern Territories', 214),
+                    ('Togo', 215),
+                    ('Thailand', 216),
+                    ('Tajikistan', 217),
+                    ('Tokelau', 218),
+                    ('Timor-Leste', 219),
+                    ('Turkmenistan', 220),
+                    ('Tunisia', 221),
+                    ('Tonga', 222),
+                    ('Turkey', 223),
+                    ('Trinidad and Tobago', 224),
+                    ('Tuvalu', 225),
+                    ('Taiwan, Province of China', 226),
+                    ('Tanzania, United Republic of', 227),
+                    ('Ukraine', 228),
+                    ('Uganda', 229),
+                    ('United States minor Outlying Islands', 230),
+                    ('United States of America', 231),
+                    ('Uruguay', 232),
+                    ('Uzbekistan', 233),
+                    ('Holy see (Vatican City state)', 234),
+                    ('Saint Vincent and the Grenadines', 235),
+                    ('Venezuela', 236),
+                    ('Virgin Islands, British', 237),
+                    ('Virgin Islands, U.S.', 238),
+                    ('Viet Nam', 239),
+                    ('Vanuatu', 240),
+                    ('Wallis and Futuna', 241),
+                    ('Samoa', 242),
+                    ('Yemen', 243),
+                    ('Mayotte', 244),
+                    ('South Africa', 245),
+                    ('Zambia', 246),
+                    ('Zimbabwe', 247)) AS v (value, position)
+            WHERE c.code_name = 'COUNTRY'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-bureautitle" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code (code_name, is_system_defined) SELECT 'BureauTitle', false WHERE NOT EXISTS (SELECT 1 FROM m_code WHERE code_name = 'BureauTitle');
+INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('Mister', 1),
+                    ('Mrs', 2),
+                    ('Miss', 3),
+                    ('Miss/Mrs', 4),
+                    ('Captain', 5),
+                    ('Colonel', 6),
+                    ('Doctor', 7),
+                    ('Lady', 8),
+                    ('Lieutenant', 9),
+                    ('Major', 10),
+                    ('Pastor', 11),
+                    ('Professor', 12),
+                    ('Reverend', 13),
+                    ('Sergeant', 14),
+                    ('Sir', 15),
+                    ('His Excellency', 16),
+                    ('Justice', 17),
+                    ('Chief', 18),
+                    ('Alhaji', 19),
+                    ('Apostle', 20),
+                    ('Commander', 21),
+                    ('Bishop', 22),
+                    ('Flight Lieutenant', 23),
+                    ('Barrister (Lawyer)', 24),
+                    ('Major General', 25),
+                    ('General', 26),
+                    ('Honourable', 27),
+                    ('Engineer', 28)) AS v (value, position)
+            WHERE c.code_name = 'BureauTitle'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-bureaunationality" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code (code_name, is_system_defined) SELECT 'BureauNationality', false WHERE NOT EXISTS (SELECT 1 FROM m_code WHERE code_name = 'BureauNationality');
+INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('Andorra', 1),
+                    ('United Arab Emirates', 2),
+                    ('Afghanistan', 3),
+                    ('Antigua and Barbuda', 4),
+                    ('Anguilla', 5),
+                    ('Albania', 6),
+                    ('Armenia', 7),
+                    ('Netherlands Antilles', 8),
+                    ('Angola', 9),
+                    ('Antarctica', 10),
+                    ('Argentina', 11),
+                    ('American Samoa', 12),
+                    ('Austria', 13),
+                    ('Australia', 14),
+                    ('Aruba', 15),
+                    ('Åland Islands', 16),
+                    ('Azerbaijan', 17),
+                    ('Bosnia and Herzegovina', 18),
+                    ('Barbados', 19),
+                    ('Bangladesh', 20),
+                    ('Belgium', 21),
+                    ('Burkina Faso', 22),
+                    ('Bulgaria', 23),
+                    ('Bahrain', 24),
+                    ('Burundi', 25),
+                    ('Benin', 26),
+                    ('Saint Barthélemy', 27),
+                    ('Bermuda', 28),
+                    ('Brunei Darussalam', 29),
+                    ('Bolivia', 30),
+                    ('Brazil', 31),
+                    ('Bahamas', 32),
+                    ('Bhutan', 33),
+                    ('Bouvet Island', 34),
+                    ('Botswana', 35),
+                    ('Belarus', 36),
+                    ('Belize', 37),
+                    ('Canada', 38),
+                    ('Cocos (Keeling) Islands', 39),
+                    ('Congo, The Democratic Republic of The', 40),
+                    ('Zaire', 41),
+                    ('Central African Republic', 42),
+                    ('Congo', 43),
+                    ('Switzerland', 44),
+                    ('Côte d''ivoire', 45),
+                    ('Cook islands', 46),
+                    ('Chile', 47),
+                    ('Cameroon', 48),
+                    ('China', 49),
+                    ('Colombia', 50),
+                    ('Costa Rica', 51),
+                    ('Cuba', 52),
+                    ('Cape Verde', 53),
+                    ('Christmas Island', 54),
+                    ('Cyprus', 55),
+                    ('Czech Republic', 56),
+                    ('Germany', 57),
+                    ('Djibouti', 58),
+                    ('Denmark', 59),
+                    ('Dominica', 60),
+                    ('Dominican Republic', 61),
+                    ('Algeria', 62),
+                    ('Ecuador', 63),
+                    ('Estonia', 64),
+                    ('Egypt', 65),
+                    ('Western Sahara', 66),
+                    ('Eritrea', 67),
+                    ('Spain', 68),
+                    ('Ethiopia', 69),
+                    ('Finland', 70),
+                    ('Fiji', 71),
+                    ('Falkland Islands (Malvinas)', 72),
+                    ('Micronesia, Federated States of', 73),
+                    ('Faroe Islands', 74),
+                    ('France', 75),
+                    ('Gabon', 76),
+                    ('United Kingdom', 77),
+                    ('Grenada', 78),
+                    ('Georgia', 79),
+                    ('French Guiana', 80),
+                    ('Guernsey', 81),
+                    ('Ghana', 82),
+                    ('Gibraltar', 83),
+                    ('Greenland', 84),
+                    ('Gambia', 85),
+                    ('Guinea', 86),
+                    ('Guadeloupe', 87),
+                    ('Equatorial Guinea', 88),
+                    ('Greece', 89),
+                    ('South Georgia and the south sandwich islands', 90),
+                    ('Guatemala', 91),
+                    ('Guam', 92),
+                    ('Guinea-Bissau', 93),
+                    ('Guyana', 94),
+                    ('Hong Kong', 95),
+                    ('Heard Island and McDonald Islands', 96),
+                    ('Honduras', 97),
+                    ('Croatia', 98),
+                    ('Haiti', 99),
+                    ('Hungary', 100),
+                    ('Indonesia', 101),
+                    ('Ireland', 102),
+                    ('Israel', 103),
+                    ('Isle of Man', 104),
+                    ('India', 105),
+                    ('British Indian Ocean Territory', 106),
+                    ('Iraq', 107),
+                    ('Iran, Islamic Republic of', 108),
+                    ('Iceland', 109),
+                    ('Italy', 110),
+                    ('Jersey', 111),
+                    ('Jamaica', 112),
+                    ('Jordan', 113),
+                    ('Japan', 114),
+                    ('Kenya', 115),
+                    ('Kyrgyzstan', 116),
+                    ('Cambodia', 117),
+                    ('Kiribati', 118),
+                    ('Comoros', 119),
+                    ('Saint Kitts and Nevis', 120),
+                    ('Korea, Democratic People''s Republic of', 121),
+                    ('Korea, Republic of', 122),
+                    ('Kuwait', 123),
+                    ('Cayman Islands', 124),
+                    ('Kazakhstan', 125),
+                    ('Lao People''s Democratic Republic', 126),
+                    ('Lebanon', 127),
+                    ('Saint Lucia', 128),
+                    ('Liechtenstein', 129),
+                    ('Sri Lanka', 130),
+                    ('Liberia', 131),
+                    ('Lesotho', 132),
+                    ('Lithuania', 133),
+                    ('Luxembourg', 134),
+                    ('Latvia', 135),
+                    ('Libyan Arab Jamahiriya', 136),
+                    ('Morocco', 137),
+                    ('Monaco', 138),
+                    ('Moldova, Republic of', 139),
+                    ('Montenegro', 140),
+                    ('Saint Martin', 141),
+                    ('Madagascar', 142),
+                    ('Marshall islands', 143),
+                    ('Macedonia, the former Yugoslav Republic of', 144),
+                    ('Mali', 145),
+                    ('Myanmar', 146),
+                    ('Mongolia', 147),
+                    ('Macao', 148),
+                    ('Northern Mariana Islands', 149),
+                    ('Martinique', 150),
+                    ('Mauritania', 151),
+                    ('Montserrat', 152),
+                    ('Malta', 153),
+                    ('Mauritius', 154),
+                    ('Maldives', 155),
+                    ('Malawi', 156),
+                    ('Mexico', 157),
+                    ('Malaysia', 158),
+                    ('Mozambique', 159),
+                    ('Namibia', 160),
+                    ('New Caledonia', 161),
+                    ('Niger', 162),
+                    ('Norfolk Island', 163),
+                    ('Nigeria', 164),
+                    ('Nicaragua', 165),
+                    ('Netherlands', 166),
+                    ('Norway', 167),
+                    ('Nepal', 168),
+                    ('Nauru', 169),
+                    ('Niue', 170),
+                    ('New Zealand', 171),
+                    ('Oman', 172),
+                    ('Panama', 173),
+                    ('Peru', 174),
+                    ('French Polynesia', 175),
+                    ('Papua New Guinea', 176),
+                    ('Philippines', 177),
+                    ('Pakistan', 178),
+                    ('Poland', 179),
+                    ('Saint Pierre and Miquelon', 180),
+                    ('Pitcairn', 181),
+                    ('Puerto Rico', 182),
+                    ('Palestinian Territory, occupied', 183),
+                    ('Portugal', 184),
+                    ('Palau', 185),
+                    ('Paraguay', 186),
+                    ('Qatar', 187),
+                    ('Réunion', 188),
+                    ('Romania', 189),
+                    ('Serbia', 190),
+                    ('Russian Federation', 191),
+                    ('Rwanda', 192),
+                    ('Saudi Arabia', 193),
+                    ('Solomon islands', 194),
+                    ('Seychelles', 195),
+                    ('Sudan', 196),
+                    ('Sweden', 197),
+                    ('Singapore', 198),
+                    ('Saint Helena', 199),
+                    ('Slovenia', 200),
+                    ('Svalbard and Jan Mayen', 201),
+                    ('Slovakia', 202),
+                    ('Sierra Leone', 203),
+                    ('San Marino', 204),
+                    ('Senegal', 205),
+                    ('Somalia', 206),
+                    ('Suriname', 207),
+                    ('Sao Tome and Principe', 208),
+                    ('El Salvador', 209),
+                    ('Syrian Arab Republic', 210),
+                    ('Swaziland', 211),
+                    ('Turks and Caicos islands', 212),
+                    ('Chad', 213),
+                    ('French Southern Territories', 214),
+                    ('Togo', 215),
+                    ('Thailand', 216),
+                    ('Tajikistan', 217),
+                    ('Tokelau', 218),
+                    ('Timor-Leste', 219),
+                    ('Turkmenistan', 220),
+                    ('Tunisia', 221),
+                    ('Tonga', 222),
+                    ('Turkey', 223),
+                    ('Trinidad and Tobago', 224),
+                    ('Tuvalu', 225),
+                    ('Taiwan, Province of China', 226),
+                    ('Tanzania, United Republic of', 227),
+                    ('Ukraine', 228),
+                    ('Uganda', 229),
+                    ('United States minor Outlying Islands', 230),
+                    ('United States of America', 231),
+                    ('Uruguay', 232),
+                    ('Uzbekistan', 233),
+                    ('Holy see (Vatican City state)', 234),
+                    ('Saint Vincent and the Grenadines', 235),
+                    ('Venezuela', 236),
+                    ('Virgin Islands, British', 237),
+                    ('Virgin Islands, U.S.', 238),
+                    ('Viet Nam', 239),
+                    ('Vanuatu', 240),
+                    ('Wallis and Futuna', 241),
+                    ('Samoa', 242),
+                    ('Yemen', 243),
+                    ('Mayotte', 244),
+                    ('South Africa', 245),
+                    ('Zambia', 246),
+                    ('Zimbabwe', 247)) AS v (value, position)
+            WHERE c.code_name = 'BureauNationality'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-bureaumaritalstatus" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code (code_name, is_system_defined) SELECT 'BureauMaritalStatus', false WHERE NOT EXISTS (SELECT 1 FROM m_code WHERE code_name = 'BureauMaritalStatus');
+INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('Married', 1),
+                    ('Single', 2),
+                    ('Widower', 3),
+                    ('Widow', 4),
+                    ('Divorced', 5)) AS v (value, position)
+            WHERE c.code_name = 'BureauMaritalStatus'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-bureauemploymentstatus" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code (code_name, is_system_defined) SELECT 'BureauEmploymentStatus', false WHERE NOT EXISTS (SELECT 1 FROM m_code WHERE code_name = 'BureauEmploymentStatus');
+INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('Employed', 1),
+                    ('Self Employed', 2),
+                    ('Unemployed', 3),
+                    ('Retired', 4),
+                    ('Student', 5)) AS v (value, position)
+            WHERE c.code_name = 'BureauEmploymentStatus'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-bureauoccupation" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code (code_name, is_system_defined) SELECT 'BureauOccupation', false WHERE NOT EXISTS (SELECT 1 FROM m_code WHERE code_name = 'BureauOccupation');
+INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('Administrator', 1),
+                    ('Architect', 2),
+                    ('Banker', 3),
+                    ('Business', 4),
+                    ('Caterer', 5),
+                    ('Chartered Accountant', 6),
+                    ('Chemist', 7),
+                    ('Civil Servant', 8),
+                    ('Cleric', 9),
+                    ('Communication', 10),
+                    ('Consultant', 11),
+                    ('Doctor', 12),
+                    ('Economist', 13),
+                    ('Engineer', 14),
+                    ('Estate Surveyor', 15),
+                    ('Farmer', 16),
+                    ('Gen. Trader', 17),
+                    ('Horologist', 18),
+                    ('Horticulture', 19),
+                    ('IT Professional', 20),
+                    ('Journalist', 21),
+                    ('Lawyer', 22),
+                    ('Management Consultant', 23),
+                    ('Medical Practitioner', 24),
+                    ('Military Officer', 25),
+                    ('Nursing', 26),
+                    ('Pharmacist', 27),
+                    ('Pilot', 28),
+                    ('Quantity Surveyor', 29),
+                    ('Retired', 30),
+                    ('Scientific', 31),
+                    ('Secretary', 32),
+                    ('Service', 33),
+                    ('Systems Analyst', 34),
+                    ('Teacher', 35),
+                    ('Others', 36)) AS v (value, position)
+            WHERE c.code_name = 'BureauOccupation'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-bureaubusinesscategory" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code (code_name, is_system_defined) SELECT 'BureauBusinessCategory', false WHERE NOT EXISTS (SELECT 1 FROM m_code WHERE code_name = 'BureauBusinessCategory');
+INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('Micro', 1),
+                    ('Small', 2),
+                    ('Medium', 3),
+                    ('Large', 4)) AS v (value, position)
+            WHERE c.code_name = 'BureauBusinessCategory'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-bureaubusinesssector" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code (code_name, is_system_defined) SELECT 'BureauBusinessSector', false WHERE NOT EXISTS (SELECT 1 FROM m_code WHERE code_name = 'BureauBusinessSector');
+INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('Agriculture/Forestry', 1),
+                    ('Building/Construction/Real Estate development', 2),
+                    ('Transportation/Storage', 3),
+                    ('Government/MDAs', 4),
+                    ('Manufacturing/Producing', 5),
+                    ('Mning/Quarrying/Mineral business', 6),
+                    ('Consumer durables/household items', 7),
+                    ('General Commerce/Traders/Importers/Exporters', 8),
+                    ('Professionals - Journalists/Lawyers/Accountants etc.', 9),
+                    ('Financial Services/banking/Insurance/capital Markets', 10),
+                    ('Communications/Tele-communications', 11),
+                    ('Hospitals/Healthcare/Pharmaceuticals', 12),
+                    ('Hotels/Hospitality/Leisure', 13),
+                    ('Automobiles/Automobile Products', 14),
+                    ('Education/Schools', 15),
+                    ('Oil &amp; Gas', 16),
+                    ('Power/Energy', 17),
+                    ('Water supply, sewage, waste management', 18),
+                    ('Arts/ entertainment', 19),
+                    ('Activities of extra-territorial organizations and bodies', 20),
+                    ('Military/Law Enforcement', 21),
+                    ('Religious services', 22),
+                    ('Others/Miscelaneous', 23)) AS v (value, position)
+            WHERE c.code_name = 'BureauBusinessSector'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-bureaulegalchallengestatus" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code (code_name, is_system_defined) SELECT 'BureauLegalChallengeStatus', false WHERE NOT EXISTS (SELECT 1 FROM m_code WHERE code_name = 'BureauLegalChallengeStatus');
+INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('No', 1),
+                    ('Yes', 2)) AS v (value, position)
+            WHERE c.code_name = 'BureauLegalChallengeStatus'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-bureauconsentstatus" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code (code_name, is_system_defined) SELECT 'BureauConsentStatus', false WHERE NOT EXISTS (SELECT 1 FROM m_code WHERE code_name = 'BureauConsentStatus');
+INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('Consent Available', 1),
+                    ('Consent Not Available', 2)) AS v (value, position)
+            WHERE c.code_name = 'BureauConsentStatus'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-kyclevel" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code (code_name, is_system_defined) SELECT 'KycLevel', false WHERE NOT EXISTS (SELECT 1 FROM m_code WHERE code_name = 'KycLevel');
+INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, true
+            FROM m_code c, (VALUES
+                    ('1', 1),
+                    ('2', 2),
+                    ('3', 3)) AS v (value, position)
+            WHERE c.code_name = 'KycLevel'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-riskrating" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code (code_name, is_system_defined) SELECT 'RiskRating', false WHERE NOT EXISTS (SELECT 1 FROM m_code WHERE code_name = 'RiskRating');
+INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('Low', 1),
+                    ('Medium', 2),
+                    ('High', 3)) AS v (value, position)
+            WHERE c.code_name = 'RiskRating'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-code-relatedpersonrole" author="oneubank" dbms="postgresql">
+        <sql>
+            INSERT INTO m_code (code_name, is_system_defined) SELECT 'RelatedPersonRole', false WHERE NOT EXISTS (SELECT 1 FROM m_code WHERE code_name = 'RelatedPersonRole');
+INSERT INTO m_code_value (code_id, code_value, code_description, order_position, is_active, is_mandatory)
+            SELECT c.id, v.value, '', (SELECT COALESCE(MAX(cv.order_position), 0) FROM m_code_value cv WHERE cv.code_id = c.id) + v.position, true, false
+            FROM m_code c, (VALUES
+                    ('Director', 1),
+                    ('Signatory', 2),
+                    ('Director &amp; Signatory', 3)) AS v (value, position)
+            WHERE c.code_name = 'RelatedPersonRole'
+              AND NOT EXISTS (SELECT 1 FROM m_code_value cv WHERE cv.code_id = c.id AND cv.code_value = v.value);
+        </sql>
+    </changeSet>
+    <!-- Addresses: on, with the fields the Banking API's address object maps to. -->
+    <changeSet id="oneubank-0004-address-module" author="oneubank" dbms="postgresql">
+        <sql>
+            UPDATE c_configuration SET enabled = true WHERE name = 'enable-address';
+            UPDATE m_field_configuration SET is_enabled = true, is_mandatory = true WHERE entity = 'ADDRESS' AND field IN ('addressType', 'addressLine1');
+            UPDATE m_field_configuration SET is_enabled = true WHERE entity = 'ADDRESS' AND field IN ('townVillage', 'countyDistrict');
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-datatable-credit_bureau_individual_details" author="oneubank" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM x_registered_table WHERE registered_table_name = 'Credit Bureau Individual Details'</sqlCheck>
+        </preConditions>
+        <sql splitStatements="true">
+            CREATE TABLE "Credit Bureau Individual Details" (
+                client_id BIGINT NOT NULL,
+                "BureauTitle_cd_Title" INTEGER DEFAULT NULL,
+                "BureauNationality_cd_Nationality" INTEGER DEFAULT NULL,
+                "BureauMaritalStatus_cd_Marital Status" INTEGER DEFAULT NULL,
+                "Place of Birth" VARCHAR(100) DEFAULT NULL,
+                "BureauEmploymentStatus_cd_Employment Status" INTEGER DEFAULT NULL,
+                "BureauOccupation_cd_Occupation" INTEGER DEFAULT NULL,
+                "BureauBusinessCategory_cd_Business Category" INTEGER DEFAULT NULL,
+                "BureauBusinessSector_cd_Business Sector" INTEGER DEFAULT NULL,
+                "Tax ID" VARCHAR(50) DEFAULT NULL,
+                "Employer Name" VARCHAR(150) DEFAULT NULL,
+                "Employer Address Line 1" VARCHAR(150) DEFAULT NULL,
+                "Employer Address Line 2" VARCHAR(150) DEFAULT NULL,
+                "Employer City" VARCHAR(100) DEFAULT NULL,
+                "Employer State" VARCHAR(100) DEFAULT NULL,
+                "Employer Country" VARCHAR(100) DEFAULT NULL,
+                "Work Phone" VARCHAR(50) DEFAULT NULL,
+                "Home Phone" VARCHAR(50) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT NULL,
+                updated_at TIMESTAMP DEFAULT NULL,
+                PRIMARY KEY (client_id),
+                CONSTRAINT "fk_credit_bureau_individual_details_client_id" FOREIGN KEY (client_id) REFERENCES m_client (id)
+            );
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category) VALUES ('Credit Bureau Individual Details', 'm_client', 'PERSON', 100);
+            INSERT INTO m_permission ("grouping", code, action_name, entity_name, can_maker_checker) VALUES
+                ('datatable', 'CREATE_Credit Bureau Individual Details', 'CREATE', 'Credit Bureau Individual Details', true),
+                ('datatable', 'CREATE_Credit Bureau Individual Details_CHECKER', 'CREATE', 'Credit Bureau Individual Details', false),
+                ('datatable', 'READ_Credit Bureau Individual Details', 'READ', 'Credit Bureau Individual Details', false),
+                ('datatable', 'UPDATE_Credit Bureau Individual Details', 'UPDATE', 'Credit Bureau Individual Details', true),
+                ('datatable', 'UPDATE_Credit Bureau Individual Details_CHECKER', 'UPDATE', 'Credit Bureau Individual Details', false),
+                ('datatable', 'DELETE_Credit Bureau Individual Details', 'DELETE', 'Credit Bureau Individual Details', true),
+                ('datatable', 'DELETE_Credit Bureau Individual Details_CHECKER', 'DELETE', 'Credit Bureau Individual Details', false);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-datatable-credit_bureau_business_details" author="oneubank" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM x_registered_table WHERE registered_table_name = 'Credit Bureau Business Details'</sqlCheck>
+        </preConditions>
+        <sql splitStatements="true">
+            CREATE TABLE "Credit Bureau Business Details" (
+                client_id BIGINT NOT NULL,
+                "BureauBusinessCategory_cd_Business Category" INTEGER DEFAULT NULL,
+                "Tax ID" VARCHAR(50) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT NULL,
+                updated_at TIMESTAMP DEFAULT NULL,
+                PRIMARY KEY (client_id),
+                CONSTRAINT "fk_credit_bureau_business_details_client_id" FOREIGN KEY (client_id) REFERENCES m_client (id)
+            );
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category) VALUES ('Credit Bureau Business Details', 'm_client', 'ENTITY', 100);
+            INSERT INTO m_permission ("grouping", code, action_name, entity_name, can_maker_checker) VALUES
+                ('datatable', 'CREATE_Credit Bureau Business Details', 'CREATE', 'Credit Bureau Business Details', true),
+                ('datatable', 'CREATE_Credit Bureau Business Details_CHECKER', 'CREATE', 'Credit Bureau Business Details', false),
+                ('datatable', 'READ_Credit Bureau Business Details', 'READ', 'Credit Bureau Business Details', false),
+                ('datatable', 'UPDATE_Credit Bureau Business Details', 'UPDATE', 'Credit Bureau Business Details', true),
+                ('datatable', 'UPDATE_Credit Bureau Business Details_CHECKER', 'UPDATE', 'Credit Bureau Business Details', false),
+                ('datatable', 'DELETE_Credit Bureau Business Details', 'DELETE', 'Credit Bureau Business Details', true),
+                ('datatable', 'DELETE_Credit Bureau Business Details_CHECKER', 'DELETE', 'Credit Bureau Business Details', false);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-datatable-credit_bureau_information" author="oneubank" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM x_registered_table WHERE registered_table_name = 'Credit Bureau Information'</sqlCheck>
+        </preConditions>
+        <sql splitStatements="true">
+            CREATE TABLE "Credit Bureau Information" (
+                loan_id BIGINT NOT NULL,
+                "BureauLegalChallengeStatus_cd_Legal Challenge Status" INTEGER DEFAULT NULL,
+                "Litigation Date" DATE DEFAULT NULL,
+                "BureauConsentStatus_cd_Consent Status" INTEGER DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT NULL,
+                updated_at TIMESTAMP DEFAULT NULL,
+                PRIMARY KEY (loan_id),
+                CONSTRAINT "fk_credit_bureau_information_loan_id" FOREIGN KEY (loan_id) REFERENCES m_loan (id)
+            );
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category) VALUES ('Credit Bureau Information', 'm_loan', NULL, 100);
+            INSERT INTO m_permission ("grouping", code, action_name, entity_name, can_maker_checker) VALUES
+                ('datatable', 'CREATE_Credit Bureau Information', 'CREATE', 'Credit Bureau Information', true),
+                ('datatable', 'CREATE_Credit Bureau Information_CHECKER', 'CREATE', 'Credit Bureau Information', false),
+                ('datatable', 'READ_Credit Bureau Information', 'READ', 'Credit Bureau Information', false),
+                ('datatable', 'UPDATE_Credit Bureau Information', 'UPDATE', 'Credit Bureau Information', true),
+                ('datatable', 'UPDATE_Credit Bureau Information_CHECKER', 'UPDATE', 'Credit Bureau Information', false),
+                ('datatable', 'DELETE_Credit Bureau Information', 'DELETE', 'Credit Bureau Information', true),
+                ('datatable', 'DELETE_Credit Bureau Information_CHECKER', 'DELETE', 'Credit Bureau Information', false);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-datatable-customer_kyc" author="oneubank" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM x_registered_table WHERE registered_table_name = 'Customer KYC'</sqlCheck>
+        </preConditions>
+        <sql splitStatements="true">
+            CREATE TABLE "Customer KYC" (
+                client_id BIGINT NOT NULL,
+                "KycLevel_cd_KYC Level" INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT NULL,
+                updated_at TIMESTAMP DEFAULT NULL,
+                PRIMARY KEY (client_id),
+                CONSTRAINT "fk_customer_kyc_client_id" FOREIGN KEY (client_id) REFERENCES m_client (id)
+            );
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category) VALUES ('Customer KYC', 'm_client', NULL, 100);
+            INSERT INTO m_permission ("grouping", code, action_name, entity_name, can_maker_checker) VALUES
+                ('datatable', 'CREATE_Customer KYC', 'CREATE', 'Customer KYC', true),
+                ('datatable', 'CREATE_Customer KYC_CHECKER', 'CREATE', 'Customer KYC', false),
+                ('datatable', 'READ_Customer KYC', 'READ', 'Customer KYC', false),
+                ('datatable', 'UPDATE_Customer KYC', 'UPDATE', 'Customer KYC', true),
+                ('datatable', 'UPDATE_Customer KYC_CHECKER', 'UPDATE', 'Customer KYC', false),
+                ('datatable', 'DELETE_Customer KYC', 'DELETE', 'Customer KYC', true),
+                ('datatable', 'DELETE_Customer KYC_CHECKER', 'DELETE', 'Customer KYC', false);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-datatable-customer_limits" author="oneubank" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM x_registered_table WHERE registered_table_name = 'Customer Limits'</sqlCheck>
+        </preConditions>
+        <sql splitStatements="true">
+            CREATE TABLE "Customer Limits" (
+                client_id BIGINT NOT NULL,
+                "Transaction Limit" DECIMAL(19,6) NOT NULL,
+                "Reference" VARCHAR(100) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT NULL,
+                updated_at TIMESTAMP DEFAULT NULL,
+                PRIMARY KEY (client_id),
+                CONSTRAINT "fk_customer_limits_client_id" FOREIGN KEY (client_id) REFERENCES m_client (id)
+            );
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category) VALUES ('Customer Limits', 'm_client', NULL, 100);
+            INSERT INTO m_permission ("grouping", code, action_name, entity_name, can_maker_checker) VALUES
+                ('datatable', 'CREATE_Customer Limits', 'CREATE', 'Customer Limits', true),
+                ('datatable', 'CREATE_Customer Limits_CHECKER', 'CREATE', 'Customer Limits', false),
+                ('datatable', 'READ_Customer Limits', 'READ', 'Customer Limits', false),
+                ('datatable', 'UPDATE_Customer Limits', 'UPDATE', 'Customer Limits', true),
+                ('datatable', 'UPDATE_Customer Limits_CHECKER', 'UPDATE', 'Customer Limits', false),
+                ('datatable', 'DELETE_Customer Limits', 'DELETE', 'Customer Limits', true),
+                ('datatable', 'DELETE_Customer Limits_CHECKER', 'DELETE', 'Customer Limits', false);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-datatable-customer_risk" author="oneubank" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM x_registered_table WHERE registered_table_name = 'Customer Risk'</sqlCheck>
+        </preConditions>
+        <sql splitStatements="true">
+            CREATE TABLE "Customer Risk" (
+                client_id BIGINT NOT NULL,
+                "PEP" BOOLEAN DEFAULT NULL,
+                "RiskRating_cd_Risk Rating" INTEGER DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT NULL,
+                updated_at TIMESTAMP DEFAULT NULL,
+                PRIMARY KEY (client_id),
+                CONSTRAINT "fk_customer_risk_client_id" FOREIGN KEY (client_id) REFERENCES m_client (id)
+            );
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category) VALUES ('Customer Risk', 'm_client', NULL, 100);
+            INSERT INTO m_permission ("grouping", code, action_name, entity_name, can_maker_checker) VALUES
+                ('datatable', 'CREATE_Customer Risk', 'CREATE', 'Customer Risk', true),
+                ('datatable', 'CREATE_Customer Risk_CHECKER', 'CREATE', 'Customer Risk', false),
+                ('datatable', 'READ_Customer Risk', 'READ', 'Customer Risk', false),
+                ('datatable', 'UPDATE_Customer Risk', 'UPDATE', 'Customer Risk', true),
+                ('datatable', 'UPDATE_Customer Risk_CHECKER', 'UPDATE', 'Customer Risk', false),
+                ('datatable', 'DELETE_Customer Risk', 'DELETE', 'Customer Risk', true),
+                ('datatable', 'DELETE_Customer Risk_CHECKER', 'DELETE', 'Customer Risk', false);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-datatable-customer_owner" author="oneubank" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM x_registered_table WHERE registered_table_name = 'Customer Owner'</sqlCheck>
+        </preConditions>
+        <sql splitStatements="true">
+            CREATE TABLE "Customer Owner" (
+                client_id BIGINT NOT NULL,
+                "Owner" VARCHAR(50) NOT NULL,
+                created_at TIMESTAMP DEFAULT NULL,
+                updated_at TIMESTAMP DEFAULT NULL,
+                PRIMARY KEY (client_id),
+                CONSTRAINT "fk_customer_owner_client_id" FOREIGN KEY (client_id) REFERENCES m_client (id)
+            );
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category) VALUES ('Customer Owner', 'm_client', NULL, 100);
+            INSERT INTO m_permission ("grouping", code, action_name, entity_name, can_maker_checker) VALUES
+                ('datatable', 'CREATE_Customer Owner', 'CREATE', 'Customer Owner', true),
+                ('datatable', 'CREATE_Customer Owner_CHECKER', 'CREATE', 'Customer Owner', false),
+                ('datatable', 'READ_Customer Owner', 'READ', 'Customer Owner', false),
+                ('datatable', 'UPDATE_Customer Owner', 'UPDATE', 'Customer Owner', true),
+                ('datatable', 'UPDATE_Customer Owner_CHECKER', 'UPDATE', 'Customer Owner', false),
+                ('datatable', 'DELETE_Customer Owner', 'DELETE', 'Customer Owner', true),
+                ('datatable', 'DELETE_Customer Owner_CHECKER', 'DELETE', 'Customer Owner', false);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0004-datatable-related_persons" author="oneubank" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM x_registered_table WHERE registered_table_name = 'Related Persons'</sqlCheck>
+        </preConditions>
+        <sql splitStatements="true">
+            CREATE TABLE "Related Persons" (
+                id BIGINT NOT NULL GENERATED BY DEFAULT AS IDENTITY,
+                client_id BIGINT NOT NULL,
+                "First Name" VARCHAR(100) NOT NULL,
+                "Middle Name" VARCHAR(100) DEFAULT NULL,
+                "Last Name" VARCHAR(100) NOT NULL,
+                "RelatedPersonRole_cd_Role" INTEGER NOT NULL,
+                "BVN" VARCHAR(11) DEFAULT NULL,
+                "NIN" VARCHAR(11) DEFAULT NULL,
+                "Date of Birth" DATE DEFAULT NULL,
+                "Phone" VARCHAR(20) DEFAULT NULL,
+                "Email" VARCHAR(100) DEFAULT NULL,
+                "Address" VARCHAR(250) DEFAULT NULL,
+                "Ownership Percentage" DECIMAL(19,6) DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT NULL,
+                updated_at TIMESTAMP DEFAULT NULL,
+                PRIMARY KEY (id),
+                CONSTRAINT "fk_related_persons_client_id" FOREIGN KEY (client_id) REFERENCES m_client (id)
+            );
+            CREATE INDEX "idx_Related Persons_client_id" ON "Related Persons" (client_id);
+            INSERT INTO x_registered_table (registered_table_name, application_table_name, entity_subtype, category) VALUES ('Related Persons', 'm_client', 'ENTITY', 100);
+            INSERT INTO m_permission ("grouping", code, action_name, entity_name, can_maker_checker) VALUES
+                ('datatable', 'CREATE_Related Persons', 'CREATE', 'Related Persons', true),
+                ('datatable', 'CREATE_Related Persons_CHECKER', 'CREATE', 'Related Persons', false),
+                ('datatable', 'READ_Related Persons', 'READ', 'Related Persons', false),
+                ('datatable', 'UPDATE_Related Persons', 'UPDATE', 'Related Persons', true),
+                ('datatable', 'UPDATE_Related Persons_CHECKER', 'UPDATE', 'Related Persons', false),
+                ('datatable', 'DELETE_Related Persons', 'DELETE', 'Related Persons', true),
+                ('datatable', 'DELETE_Related Persons_CHECKER', 'DELETE', 'Related Persons', false);
+        </sql>
+    </changeSet>
+    <!-- The Banking API sets KYC level, limits, PEP and risk rating, directors and signatories, and the owner. -->
+    <changeSet id="oneubank-0004-banking-api-datatable-permissions" author="oneubank" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <sqlCheck expectedResult="1">SELECT COUNT(*) FROM m_role WHERE name = 'Banking API'</sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO m_role_permission (role_id, permission_id)
+            SELECT r.id, p.id FROM m_role r, m_permission p
+            WHERE r.name = 'Banking API'
+              AND p.code IN ('CREATE_Customer KYC', 'READ_Customer KYC', 'UPDATE_Customer KYC', 'CREATE_Customer Limits', 'READ_Customer Limits', 'UPDATE_Customer Limits', 'DELETE_Customer Limits', 'CREATE_Customer Risk', 'READ_Customer Risk', 'UPDATE_Customer Risk', 'CREATE_Customer Owner', 'READ_Customer Owner', 'CREATE_Related Persons', 'READ_Related Persons', 'UPDATE_Related Persons', 'DELETE_Related Persons')
+              AND NOT EXISTS (SELECT 1 FROM m_role_permission rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
+        </sql>
+    </changeSet>
+</databaseChangeLog>

@@ -307,6 +307,18 @@ Two settings choose how callers sign in to the API:
 
 **Rolling back:** redeploy the previous image tag. If the release included database migrations, the previous image may not run against the migrated database; restore the snapshot taken before the release first.
 
+### Account numbers (NUBAN)
+
+A savings product's **NUBAN prefix** (3 digits, set on the product screen) makes every account opened on it a NUBAN: the prefix, a 6-digit serial and the CBN check digit for institution code 090605. Products without a prefix keep Fineract's own numbering. Each prefix has its own serial counter, the database sequence `nuban_serial_<prefix>`, shared by every product with that prefix. The prefix cannot change once the product has accounts.
+
+**After loading TransactionPoint's accounts**, and before any new account is opened, move the counters past every NUBAN already issued:
+
+```bash
+psql -v ON_ERROR_STOP=1 -d <tenant database> -f scripts/oneubank/nuban-serials-after-migration.sql
+```
+
+First add TP's own counters and any NUBANs held outside savings accounts (sub-ledgers) to the `nuban_issued_elsewhere` insert at the top of the script. The script can be run again; counters only move forward.
+
 ### Rotating the database password
 
 CBA-CORE uses the application database password in two places:

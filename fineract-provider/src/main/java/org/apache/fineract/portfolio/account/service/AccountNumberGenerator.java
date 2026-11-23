@@ -32,6 +32,7 @@ import org.apache.fineract.infrastructure.codes.domain.CodeValue;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.infrastructure.configuration.data.GlobalConfigurationPropertyData;
 import org.apache.fineract.infrastructure.configuration.service.ConfigurationReadPlatformService;
+import org.apache.fineract.oneubank.nuban.NubanGenerator;
 import org.apache.fineract.portfolio.client.domain.Client;
 import org.apache.fineract.portfolio.client.domain.ClientRepository;
 import org.apache.fineract.portfolio.group.domain.Group;
@@ -67,6 +68,7 @@ public class AccountNumberGenerator implements AccountNumberGeneratorService {
     private final LoanRepository loanRepository;
     private final SavingsAccountRepository savingsAccountRepository;
     private final WorkingCapitalLoanRepository workingCapitalLoanRepository;
+    private final NubanGenerator nubanGenerator; // 1UBank
 
     public String generate(Client client, AccountNumberFormat accountNumberFormat) {
         Map<String, String> propertyMap = new HashMap<>();
@@ -90,6 +92,11 @@ public class AccountNumberGenerator implements AccountNumberGeneratorService {
     }
 
     public String generate(SavingsAccount savingsAccount, AccountNumberFormat accountNumberFormat) {
+        // 1UBank: accounts on a product with a NUBAN prefix are numbered as NUBANs
+        final String nuban = this.nubanGenerator.next(savingsAccount.savingsProduct().getNubanPrefix());
+        if (nuban != null) {
+            return nuban;
+        }
         Map<String, String> propertyMap = new HashMap<>();
         propertyMap.put(ID, savingsAccount.getId().toString());
         propertyMap.put(OFFICE_NAME, savingsAccount.office().getName());

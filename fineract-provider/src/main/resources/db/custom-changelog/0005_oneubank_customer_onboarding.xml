@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    1UBank: permissions for POST /v1/oneubank/customers (a customer, their identifiers and first account in one
+    transaction) and PUT /v1/oneubank/customers/{clientId} (an update in one transaction), granted to the Banking API
+    with what its customer calls need (the code lists behind dropdowns, addresses, identifier updates). Staff create
+    and edit customers on the portal's usual screens.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    <changeSet id="oneubank-0005-customer-onboarding-permission" author="oneubank" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_permission WHERE code = 'CREATE_ONEUBANKCUSTOMER'</sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO m_permission ("grouping", code, entity_name, action_name, can_maker_checker)
+            VALUES ('portfolio', 'CREATE_ONEUBANKCUSTOMER', 'ONEUBANKCUSTOMER', 'CREATE', false);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0005-banking-api-customer-onboarding" author="oneubank" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <sqlCheck expectedResult="1">SELECT COUNT(*) FROM m_role WHERE name = 'Banking API'</sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO m_role_permission (role_id, permission_id)
+            SELECT r.id, p.id FROM m_role r, m_permission p
+            WHERE r.name = 'Banking API' AND p.code IN ('CREATE_ONEUBANKCUSTOMER', 'READ_CODE', 'READ_ADDRESS')
+              AND NOT EXISTS (SELECT 1 FROM m_role_permission rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0005-customer-update-permission" author="oneubank" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_permission WHERE code = 'UPDATE_ONEUBANKCUSTOMER'</sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO m_permission ("grouping", code, entity_name, action_name, can_maker_checker)
+            VALUES ('portfolio', 'UPDATE_ONEUBANKCUSTOMER', 'ONEUBANKCUSTOMER', 'UPDATE', false);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0005-banking-api-customer-update" author="oneubank" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <sqlCheck expectedResult="1">SELECT COUNT(*) FROM m_role WHERE name = 'Banking API'</sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO m_role_permission (role_id, permission_id)
+            SELECT r.id, p.id FROM m_role r, m_permission p
+            WHERE r.name = 'Banking API'
+              AND p.code IN ('UPDATE_ONEUBANKCUSTOMER', 'UPDATE_CLIENTIDENTIFIER', 'CREATE_ADDRESS', 'UPDATE_ADDRESS')
+              AND NOT EXISTS (SELECT 1 FROM m_role_permission rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0005-open-account-permission" author="oneubank" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM m_permission WHERE code = 'CREATE_ONEUBANKACCOUNT'</sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO m_permission ("grouping", code, entity_name, action_name, can_maker_checker)
+            VALUES ('portfolio', 'CREATE_ONEUBANKACCOUNT', 'ONEUBANKACCOUNT', 'CREATE', false);
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0005-banking-api-open-account" author="oneubank" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <sqlCheck expectedResult="1">SELECT COUNT(*) FROM m_role WHERE name = 'Banking API'</sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO m_role_permission (role_id, permission_id)
+            SELECT r.id, p.id FROM m_role r, m_permission p
+            WHERE r.name = 'Banking API' AND p.code = 'CREATE_ONEUBANKACCOUNT'
+              AND NOT EXISTS (SELECT 1 FROM m_role_permission rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
+        </sql>
+    </changeSet>
+</databaseChangeLog>
