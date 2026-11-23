@@ -74,6 +74,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.apache.fineract.accounting.common.AccountingRuleType;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
@@ -81,6 +82,7 @@ import org.apache.fineract.infrastructure.core.data.ApiParameterError;
 import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
 import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
+import org.apache.fineract.oneubank.savings.SavingsProductOneUBankParams;
 import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
 import org.apache.fineract.organisation.monetary.domain.Money;
 import org.apache.fineract.portfolio.charge.domain.Charge;
@@ -208,6 +210,13 @@ public class SavingsProduct extends AbstractPersistableCustom<Long> {
 
     @Column(name = "days_to_escheat")
     private Long daysToEscheat;
+
+    // 1UBank: see SavingsProductOneUBankParams
+    @Column(name = "nuban_prefix", length = 3)
+    private String nubanPrefix;
+
+    @Column(name = "enforce_tier_limits", nullable = false)
+    private boolean enforceTierLimits;
 
     public static SavingsProduct createNew(final String name, final String shortName, final String description,
             final MonetaryCurrency currency, final BigDecimal interestRate,
@@ -616,6 +625,21 @@ public class SavingsProduct extends AbstractPersistableCustom<Long> {
             this.daysToEscheat = null;
         }
 
+        // 1UBank
+        if (command.isChangeInStringParameterNamed(SavingsProductOneUBankParams.NUBAN_PREFIX, this.nubanPrefix)) {
+            final String newValue = SavingsProductOneUBankParams
+                    .normalisePrefix(command.stringValueOfParameterNamed(SavingsProductOneUBankParams.NUBAN_PREFIX));
+            if (!Objects.equals(newValue, this.nubanPrefix)) {
+                actualChanges.put(SavingsProductOneUBankParams.NUBAN_PREFIX, newValue);
+                this.nubanPrefix = newValue;
+            }
+        }
+        if (command.isChangeInBooleanParameterNamed(SavingsProductOneUBankParams.ENFORCE_TIER_LIMITS, this.enforceTierLimits)) {
+            final boolean newValue = command.booleanPrimitiveValueOfParameterNamed(SavingsProductOneUBankParams.ENFORCE_TIER_LIMITS);
+            actualChanges.put(SavingsProductOneUBankParams.ENFORCE_TIER_LIMITS, newValue);
+            this.enforceTierLimits = newValue;
+        }
+
         validateLockinDetails();
         esnureOverdraftLimitsSetForOverdraftAccounts();
 
@@ -777,6 +801,20 @@ public class SavingsProduct extends AbstractPersistableCustom<Long> {
 
     public Long getDaysToEscheat() {
         return this.daysToEscheat;
+    }
+
+    // 1UBank
+    public String getNubanPrefix() {
+        return this.nubanPrefix;
+    }
+
+    public boolean isEnforceTierLimits() {
+        return this.enforceTierLimits;
+    }
+
+    public void setOneUBankFields(final String nubanPrefix, final boolean enforceTierLimits) {
+        this.nubanPrefix = SavingsProductOneUBankParams.normalisePrefix(nubanPrefix);
+        this.enforceTierLimits = enforceTierLimits;
     }
 
 }

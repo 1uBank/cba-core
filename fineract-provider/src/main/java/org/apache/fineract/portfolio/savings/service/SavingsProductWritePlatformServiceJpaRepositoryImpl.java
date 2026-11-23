@@ -42,6 +42,7 @@ import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidati
 import org.apache.fineract.infrastructure.entityaccess.domain.FineractEntityAccessType;
 import org.apache.fineract.infrastructure.entityaccess.service.FineractEntityAccessUtil;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
+import org.apache.fineract.oneubank.savings.SavingsProductOneUBankParams;
 import org.apache.fineract.portfolio.charge.domain.Charge;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
@@ -86,6 +87,11 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
             msg = "Savings product with short name `" + shortName + "` already exists";
             param = "shortName";
             msgArgs = new Object[] { shortName, dae };
+        } else if (checkEx.getMessage().contains(SavingsProductOneUBankParams.PREFIX_LOCKED_MARKER)) { // 1UBank
+            msgCode += ".nuban.prefix.locked";
+            msg = "The NUBAN prefix cannot change once the product has accounts";
+            param = SavingsProductOneUBankParams.NUBAN_PREFIX;
+            msgArgs = new Object[] { command.stringValueOfParameterNamed(param), dae };
         } else {
             msgCode += ".unknown.data.integrity.issue";
             msgArgs = new Object[] { dae };

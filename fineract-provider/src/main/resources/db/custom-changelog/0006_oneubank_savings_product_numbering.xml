@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    1UBank: two fields on savings products.
+    - nuban_prefix: the 3 digits that start the NUBAN of every account opened on the product (see NubanGenerator).
+      Optional; it cannot change once the product has accounts (trigger below). A data migration that loads
+      products and accounts sets the prefix before loading the product's accounts.
+    - enforce_tier_limits: whether KYC tier limits and the account's own transaction limit apply to the product's
+      accounts.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    <changeSet id="oneubank-0006-savings-product-fields" author="oneubank" dbms="postgresql">
+        <addColumn tableName="m_savings_product">
+            <column name="nuban_prefix" type="VARCHAR(3)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="enforce_tier_limits" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <sql>ALTER TABLE m_savings_product ADD CONSTRAINT oneubank_nuban_prefix_digits CHECK (nuban_prefix ~ '^[0-9]{3}$')</sql>
+    </changeSet>
+    <changeSet id="oneubank-0006-nuban-prefix-lock" author="oneubank" dbms="postgresql">
+        <sql splitStatements="false">
+            CREATE OR REPLACE FUNCTION oneubank_nuban_prefix_lock() RETURNS trigger AS $$
+            BEGIN
+                IF NEW.nuban_prefix IS DISTINCT FROM OLD.nuban_prefix
+                   AND EXISTS (SELECT 1 FROM m_savings_account WHERE product_id = OLD.id) THEN
+                    RAISE EXCEPTION 'oneubank_nuban_prefix_locked: savings product % has accounts', OLD.id
+                        USING ERRCODE = '23514';
+                END IF;
+                RETURN NEW;
+            END
+            $$ LANGUAGE plpgsql;
+        </sql>
+        <sql>
+            CREATE TRIGGER oneubank_nuban_prefix_lock BEFORE UPDATE OF nuban_prefix ON m_savings_product
+            FOR EACH ROW EXECUTE FUNCTION oneubank_nuban_prefix_lock();
+        </sql>
+    </changeSet>
+</databaseChangeLog>

@@ -72,6 +72,7 @@ import org.apache.fineract.infrastructure.core.data.DataValidatorBuilder;
 import org.apache.fineract.infrastructure.core.exception.InvalidJsonException;
 import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
+import org.apache.fineract.oneubank.savings.SavingsProductOneUBankParams;
 import org.apache.fineract.portfolio.savings.DepositAccountType;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.apache.fineract.portfolio.savings.SavingsCompoundingInterestPeriodType;
@@ -109,8 +110,8 @@ public class SavingsProductDataValidator {
             allowOverdraftParamName, overdraftLimitParamName, nominalAnnualInterestRateOverdraftParamName,
             minOverdraftForInterestCalculationParamName, SavingsApiConstants.minRequiredBalanceParamName,
             SavingsApiConstants.enforceMinRequiredBalanceParamName, SavingsApiConstants.maxAllowedLienLimitParamName,
-            SavingsApiConstants.lienAllowedParamName, minBalanceForInterestCalculationParamName, withHoldTaxParamName,
-            taxGroupIdParamName));
+            SavingsApiConstants.lienAllowedParamName, minBalanceForInterestCalculationParamName, withHoldTaxParamName, taxGroupIdParamName,
+            SavingsProductOneUBankParams.NUBAN_PREFIX, SavingsProductOneUBankParams.ENFORCE_TIER_LIMITS));
 
     public void validateForCreate(final String json) {
 
@@ -273,6 +274,7 @@ public class SavingsProductDataValidator {
         }
         validateTaxWithHoldingParams(baseDataValidator, element, true);
         validateLienParams(baseDataValidator, element);
+        SavingsProductOneUBankParams.validate(baseDataValidator, element, this.fromApiJsonHelper); // 1UBank
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 
@@ -442,6 +444,7 @@ public class SavingsProductDataValidator {
 
         validateTaxWithHoldingParams(baseDataValidator, element, false);
         validateLienParams(baseDataValidator, element);
+        SavingsProductOneUBankParams.validate(baseDataValidator, element, this.fromApiJsonHelper); // 1UBank
         throwExceptionIfValidationWarningsExist(dataValidationErrors);
     }
 
