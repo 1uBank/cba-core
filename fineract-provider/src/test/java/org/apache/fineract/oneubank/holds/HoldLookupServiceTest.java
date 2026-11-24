@@ -65,6 +65,7 @@ class HoldLookupServiceTest {
         row.put("is_reversed", false);
         row.put("release_id", releaseId);
         row.put("released_on_utc", releaseId == null ? null : OffsetDateTime.of(2026, 11, 23, 10, 0, 0, 0, ZoneOffset.UTC));
+        row.put("created_by", "service-account-banking-api");
         return row;
     }
 
@@ -76,7 +77,8 @@ class HoldLookupServiceTest {
 
         assertThat(hold).containsEntry("holdTransactionId", 95501L).containsEntry("accountNo", "0020001580")
                 .containsEntry("amount", "2500.000000").containsEntry("released", false)
-                .containsEntry("createdOn", "2026-11-23T08:15:00Z").containsEntry("releasedOn", null);
+                .containsEntry("createdOn", "2026-11-23T08:15:00Z").containsEntry("releasedOn", null)
+                .containsEntry("placedBy", "service-account-banking-api");
     }
 
     @Test
