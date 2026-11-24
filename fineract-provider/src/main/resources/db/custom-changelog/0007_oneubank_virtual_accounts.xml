@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements. See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership. The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied. See the License for the
+    specific language governing permissions and limitations
+    under the License.
+
+-->
+<!--
+    1UBank: static virtual accounts.
+    - m_savings_product.virtual_account_type: the kind of virtual account opened on the product (SMART_TRANSFER,
+      AIRTIME, ...), set by staff on the product screen; one product per type.
+    - va_details: what a virtual account is on top of its savings account: its type, the parent account its money
+      may move to, the client's label (the name payers see is "<owner's name> - <label>"), the reference it was
+      created with, and when it was closed.
+-->
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.3.xsd">
+    <changeSet id="oneubank-0007-savings-product-virtual-account-type" author="oneubank" dbms="postgresql">
+        <addColumn tableName="m_savings_product">
+            <column name="virtual_account_type" type="VARCHAR(30)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <sql>
+            CREATE UNIQUE INDEX oneubank_va_type_one_product ON m_savings_product (virtual_account_type)
+            WHERE virtual_account_type IS NOT NULL;
+        </sql>
+    </changeSet>
+    <changeSet id="oneubank-0007-va-details" author="oneubank" dbms="postgresql">
+        <createTable tableName="va_details">
+            <column name="savings_account_id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false" foreignKeyName="fk_va_details_account"
+                             referencedTableName="m_savings_account" referencedColumnNames="id"/>
+            </column>
+            <column name="type" type="VARCHAR(30)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="parent_savings_account_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_va_details_parent"
+                             referencedTableName="m_savings_account" referencedColumnNames="id"/>
+            </column>
+            <column name="label" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="transaction_reference" type="VARCHAR(50)">
+                <constraints nullable="true" unique="true" uniqueConstraintName="va_details_reference_unique"/>
+            </column>
+            <column name="created_on_utc" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_on_utc" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="closed_on_utc" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="true"/>
+            </column>
+        </createTable>
+        <createIndex tableName="va_details" indexName="va_details_parent">
+            <column name="parent_savings_account_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

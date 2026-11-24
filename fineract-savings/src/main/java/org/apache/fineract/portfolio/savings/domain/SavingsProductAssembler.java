@@ -203,7 +203,8 @@ public class SavingsProductAssembler {
                 daysToEscheat);
         // 1UBank
         product.setOneUBankFields(command.stringValueOfParameterNamed(SavingsProductOneUBankParams.NUBAN_PREFIX),
-                command.booleanPrimitiveValueOfParameterNamed(SavingsProductOneUBankParams.ENFORCE_TIER_LIMITS));
+                command.booleanPrimitiveValueOfParameterNamed(SavingsProductOneUBankParams.ENFORCE_TIER_LIMITS),
+                command.stringValueOfParameterNamed(SavingsProductOneUBankParams.VIRTUAL_ACCOUNT_TYPE));
         return product;
     }
 

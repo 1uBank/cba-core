@@ -122,6 +122,9 @@ public final class SavingsProductData implements Serializable {
     @Getter
     @Setter
     private boolean enforceTierLimits;
+    @Getter
+    @Setter
+    private String virtualAccountType;
 
     public static SavingsProductData template(final CurrencyData currency, final EnumOptionData interestCompoundingPeriodType,
             final EnumOptionData interestPostingPeriodType, final EnumOptionData interestCalculationType,
@@ -314,6 +317,7 @@ public final class SavingsProductData implements Serializable {
     private static SavingsProductData withOneUBankFields(final SavingsProductData from, final SavingsProductData to) {
         to.nubanPrefix = from.nubanPrefix;
         to.enforceTierLimits = from.enforceTierLimits;
+        to.virtualAccountType = from.virtualAccountType;
         return to;
     }
 

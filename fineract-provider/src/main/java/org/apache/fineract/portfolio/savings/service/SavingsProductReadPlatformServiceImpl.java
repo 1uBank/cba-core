@@ -130,7 +130,8 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
             sqlBuilder.append("sp.days_to_inactive as daysToInactive,");
             sqlBuilder.append("sp.days_to_dormancy as daysToDormancy,");
             sqlBuilder.append("sp.days_to_escheat as daysToEscheat, ");
-            sqlBuilder.append("sp.nuban_prefix as nubanPrefix, sp.enforce_tier_limits as enforceTierLimits "); // 1UBank
+            sqlBuilder.append("sp.nuban_prefix as nubanPrefix, sp.enforce_tier_limits as enforceTierLimits, ");
+            sqlBuilder.append("sp.virtual_account_type as virtualAccountType "); // 1UBank
             sqlBuilder.append("from m_savings_product sp ");
             sqlBuilder.append("join m_currency curr on curr.code = sp.currency_code ");
             sqlBuilder.append("left join m_tax_group tg on tg.id = sp.tax_group_id  ");
@@ -224,6 +225,7 @@ public class SavingsProductReadPlatformServiceImpl implements SavingsProductRead
             // 1UBank
             product.setNubanPrefix(rs.getString("nubanPrefix"));
             product.setEnforceTierLimits(rs.getBoolean("enforceTierLimits"));
+            product.setVirtualAccountType(rs.getString("virtualAccountType"));
             return product;
         }
     }
