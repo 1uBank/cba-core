@@ -87,6 +87,11 @@ public class SavingsProductWritePlatformServiceJpaRepositoryImpl implements Savi
             msg = "Savings product with short name `" + shortName + "` already exists";
             param = "shortName";
             msgArgs = new Object[] { shortName, dae };
+        } else if (checkEx.getMessage().contains(SavingsProductOneUBankParams.ONE_PRODUCT_PER_TYPE_INDEX)) { // 1UBank
+            msgCode += ".virtual.account.type.taken";
+            msg = "Another savings product is already set up for this virtual account type";
+            param = SavingsProductOneUBankParams.VIRTUAL_ACCOUNT_TYPE;
+            msgArgs = new Object[] { command.stringValueOfParameterNamed(param), dae };
         } else if (checkEx.getMessage().contains(SavingsProductOneUBankParams.PREFIX_LOCKED_MARKER)) { // 1UBank
             msgCode += ".nuban.prefix.locked";
             msg = "The NUBAN prefix cannot change once the product has accounts";

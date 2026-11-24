@@ -218,6 +218,9 @@ public class SavingsProduct extends AbstractPersistableCustom<Long> {
     @Column(name = "enforce_tier_limits", nullable = false)
     private boolean enforceTierLimits;
 
+    @Column(name = "virtual_account_type", length = 30)
+    private String virtualAccountType;
+
     public static SavingsProduct createNew(final String name, final String shortName, final String description,
             final MonetaryCurrency currency, final BigDecimal interestRate,
             final SavingsCompoundingInterestPeriodType interestCompoundingPeriodType,
@@ -634,6 +637,14 @@ public class SavingsProduct extends AbstractPersistableCustom<Long> {
                 this.nubanPrefix = newValue;
             }
         }
+        if (command.isChangeInStringParameterNamed(SavingsProductOneUBankParams.VIRTUAL_ACCOUNT_TYPE, this.virtualAccountType)) {
+            final String newValue = SavingsProductOneUBankParams
+                    .normaliseType(command.stringValueOfParameterNamed(SavingsProductOneUBankParams.VIRTUAL_ACCOUNT_TYPE));
+            if (!Objects.equals(newValue, this.virtualAccountType)) {
+                actualChanges.put(SavingsProductOneUBankParams.VIRTUAL_ACCOUNT_TYPE, newValue);
+                this.virtualAccountType = newValue;
+            }
+        }
         if (command.isChangeInBooleanParameterNamed(SavingsProductOneUBankParams.ENFORCE_TIER_LIMITS, this.enforceTierLimits)) {
             final boolean newValue = command.booleanPrimitiveValueOfParameterNamed(SavingsProductOneUBankParams.ENFORCE_TIER_LIMITS);
             actualChanges.put(SavingsProductOneUBankParams.ENFORCE_TIER_LIMITS, newValue);
@@ -812,9 +823,14 @@ public class SavingsProduct extends AbstractPersistableCustom<Long> {
         return this.enforceTierLimits;
     }
 
-    public void setOneUBankFields(final String nubanPrefix, final boolean enforceTierLimits) {
+    public String getVirtualAccountType() {
+        return this.virtualAccountType;
+    }
+
+    public void setOneUBankFields(final String nubanPrefix, final boolean enforceTierLimits, final String virtualAccountType) {
         this.nubanPrefix = SavingsProductOneUBankParams.normalisePrefix(nubanPrefix);
         this.enforceTierLimits = enforceTierLimits;
+        this.virtualAccountType = SavingsProductOneUBankParams.normaliseType(virtualAccountType);
     }
 
 }

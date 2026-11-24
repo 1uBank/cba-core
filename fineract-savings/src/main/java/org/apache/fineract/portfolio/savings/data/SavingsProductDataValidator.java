@@ -111,7 +111,8 @@ public class SavingsProductDataValidator {
             minOverdraftForInterestCalculationParamName, SavingsApiConstants.minRequiredBalanceParamName,
             SavingsApiConstants.enforceMinRequiredBalanceParamName, SavingsApiConstants.maxAllowedLienLimitParamName,
             SavingsApiConstants.lienAllowedParamName, minBalanceForInterestCalculationParamName, withHoldTaxParamName, taxGroupIdParamName,
-            SavingsProductOneUBankParams.NUBAN_PREFIX, SavingsProductOneUBankParams.ENFORCE_TIER_LIMITS));
+            SavingsProductOneUBankParams.NUBAN_PREFIX, SavingsProductOneUBankParams.ENFORCE_TIER_LIMITS,
+            SavingsProductOneUBankParams.VIRTUAL_ACCOUNT_TYPE));
 
     public void validateForCreate(final String json) {
 
