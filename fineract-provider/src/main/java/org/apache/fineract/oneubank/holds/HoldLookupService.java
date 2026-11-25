@@ -44,9 +44,11 @@ public class HoldLookupService {
 
     private static final String SELECT = """
             SELECT t.id, t.savings_account_id, sa.account_no, sa.client_id, t.amount, t.reason_for_block, t.external_id,
-                   t.created_on_utc, t.is_reversed, r.id AS release_id, r.created_on_utc AS released_on_utc
+                   t.created_on_utc, t.is_reversed, r.id AS release_id, r.created_on_utc AS released_on_utc,
+                   u.username AS created_by
             FROM m_savings_account_transaction t
             JOIN m_savings_account sa ON sa.id = t.savings_account_id
+            LEFT JOIN m_appuser u ON u.id = t.created_by
             LEFT JOIN m_savings_account_transaction r ON r.id = t.release_id_of_hold_amount
             WHERE t.transaction_type_enum = ?
             """;
@@ -91,6 +93,7 @@ public class HoldLookupService {
         hold.put("releaseTransactionId", row.get("release_id"));
         hold.put("releasedOn", timestamp(row.get("released_on_utc")));
         hold.put("reversed", Boolean.TRUE.equals(row.get("is_reversed")));
+        hold.put("placedBy", row.get("created_by"));
         return hold;
     }
 
